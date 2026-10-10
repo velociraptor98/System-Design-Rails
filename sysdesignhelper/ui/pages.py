@@ -3,13 +3,19 @@ from __future__ import annotations
 import random
 
 from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
-    QAbstractItemView, QHBoxLayout, QListWidget, QListWidgetItem, QPlainTextEdit, QPushButton,
-    QStackedWidget, QVBoxLayout, QWidget,
+    QAbstractItemView, QFrame, QHBoxLayout, QLineEdit, QListWidget, QListWidgetItem, QStackedWidget,
+    QVBoxLayout, QWidget,
 )
 
 from ..content import Library, Page, RecallPrompt
-from .widgets import ClaimView, card, chip, label, scrollable
+from . import icons, theme
+from .widgets import (
+    EditorCard, Toolbar, add_claims, button, card, chip, clear_layout, discard, label, rule, scrollable,
+)
+
+PAGE_ID = Qt.ItemDataRole.UserRole
 
 
 class RecallDrill(QWidget):
@@ -21,63 +27,63 @@ class RecallDrill(QWidget):
         self.prompts = prompts
         self.index = 0
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 18, 24, 18)
-        layout.setSpacing(12)
-        back = QPushButton("‹  Back to Pages")
-        back.setObjectName("link")
-        back.clicked.connect(self.finished.emit)
-        layout.addWidget(back, 0, Qt.AlignmentFlag.AlignLeft)
-        self.progress = label("", "muted")
-        layout.addWidget(self.progress)
-        self.prompt = label("", "h2")
-        layout.addWidget(self.prompt)
-        self.editor = QPlainTextEdit()
-        self.editor.setPlaceholderText("Answer from memory, then reveal.")
-        self.editor.setFixedHeight(120)
-        layout.addWidget(self.editor)
-        row = QHBoxLayout()
-        self.reveal_button = QPushButton("Reveal")
-        self.reveal_button.setObjectName("primary")
-        self.reveal_button.clicked.connect(self.reveal)
-        self.next_button = QPushButton("Next")
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        self.toolbar = Toolbar("", " ", with_back=True)
+        self.toolbar.back.connect(self.finished.emit)
+        self.next_button = button("Next")
         self.next_button.clicked.connect(self.next)
-        row.addWidget(self.reveal_button)
-        row.addWidget(self.next_button)
-        row.addStretch(1)
-        layout.addLayout(row)
+        self.reveal_button = button("Reveal Answer", "cta", icon_name="reveal", icon_color="#ffffff")
+        self.reveal_button.clicked.connect(self.reveal)
+        self.toolbar.add_action(self.next_button)
+        self.toolbar.add_action(self.reveal_button)
+        outer.addWidget(self.toolbar)
+
+        body = QVBoxLayout()
+        body.setContentsMargins(32, 4, 32, 32)
+        body.setSpacing(16)
+        self.prompt = label("", "prompt")
+        self.prompt.setMaximumWidth(760)
+        body.addWidget(self.prompt)
+        row = QHBoxLayout()
+        row.setSpacing(14)
+        self.card = EditorCard("Answer from memory, then reveal.")
+        self.editor = self.card.editor
+        row.addWidget(self.card, 5)
         self.answer_host = QWidget()
         self.answer_layout = QVBoxLayout(self.answer_host)
-        self.answer_layout.setContentsMargins(0, 0, 12, 0)
-        layout.addWidget(scrollable(self.answer_host), 1)
+        self.answer_layout.setContentsMargins(0, 0, 10, 0)
+        self.answer_area = scrollable(self.answer_host)
+        self.answer_area.hide()
+        row.addWidget(self.answer_area, 6)
+        body.addLayout(row, 1)
+        outer.addLayout(body, 1)
         self._show()
 
     def current(self) -> RecallPrompt:
         return self.prompts[self.index]
 
-    def _clear_answer(self) -> None:
-        while self.answer_layout.count():
-            item = self.answer_layout.takeAt(0)
-            if item.widget() is not None:
-                item.widget().deleteLater()
-
     def _show(self) -> None:
         prompt = self.current()
         page = self.library.page(prompt.page_id)
-        self.progress.setText(f"Recall prompt {self.index + 1} of {len(self.prompts)}  ·  {page.name}")
+        self.toolbar.title.setText(f"Recall prompt {self.index + 1} of {len(self.prompts)}")
+        self.toolbar.set_subtitle(page.name)
         self.prompt.setText(prompt.prompt)
         self.editor.clear()
-        self._clear_answer()
+        clear_layout(self.answer_layout)
+        self.answer_area.hide()
         self.reveal_button.setEnabled(True)
         self.next_button.setText("Finish" if self.index == len(self.prompts) - 1 else "Next")
 
     def reveal(self) -> None:
-        self._clear_answer()
+        clear_layout(self.answer_layout)
         frame, box = card()
-        for claim in self.current().answer:
-            box.addWidget(ClaimView(claim))
+        box.addWidget(label("Answer", "h2"))
+        add_claims(box, self.current().answer)
         self.answer_layout.addWidget(frame)
         self.answer_layout.addStretch(1)
+        self.answer_area.show()
         self.reveal_button.setEnabled(False)
 
     def next(self) -> None:
@@ -94,35 +100,55 @@ class PagesView(QWidget):
         self.library = library
         self.drill: RecallDrill | None = None
 
+        toolbar = Toolbar("Pages")
+        self.drill_button = button("Drill Recall Prompts", "cta", icon_name="drill", icon_color="#ffffff")
+        self.drill_button.clicked.connect(self.start_drill)
+        toolbar.add_action(self.drill_button)
+
+        self.search = QLineEdit()
+        self.search.setObjectName("search")
+        self.search.setPlaceholderText("Search")
+        self.search.addAction(icons.icon("search", theme.TEXT3, 14), QLineEdit.ActionPosition.LeadingPosition)
+        self.search.textChanged.connect(self._filter)
         self.listing = QListWidget()
-        self.listing.setFixedWidth(280)
+        self.listing.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.listing.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.listing.setTextElideMode(Qt.TextElideMode.ElideRight)
-        self.listing.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self._add_group("COMPONENTS", library.components.values())
         self._add_group("MECHANISMS", library.mechanisms.values())
-        self.drill_button = QPushButton("Drill Recall prompts")
-        self.drill_button.setObjectName("primary")
-        self.drill_button.clicked.connect(self.start_drill)
-        self.drill_hint = label("", "muted")
+        self.drill_hint = label("", "hint")
 
-        left = QVBoxLayout()
-        left.setSpacing(8)
-        left.addWidget(label("Pages", "h1"))
-        left.addWidget(self.listing, 1)
-        left.addWidget(self.drill_button)
-        left.addWidget(self.drill_hint)
+        index = QFrame()
+        index.setObjectName("card")
+        index.setFixedWidth(264)
+        column = QVBoxLayout(index)
+        column.setContentsMargins(0, 10, 0, 0)
+        column.setSpacing(4)
+        search_row = QHBoxLayout()
+        search_row.setContentsMargins(10, 0, 10, 0)
+        search_row.addWidget(self.search)
+        column.addLayout(search_row)
+        column.addWidget(self.listing, 1)
+        column.addWidget(rule())
+        self.drill_hint.setContentsMargins(14, 8, 14, 10)
+        column.addWidget(self.drill_hint)
 
         self.page_host = QWidget()
         self.page_layout = QVBoxLayout(self.page_host)
-        self.page_layout.setContentsMargins(0, 0, 12, 0)
-        self.page_layout.setSpacing(12)
+        self.page_layout.setContentsMargins(0, 0, 10, 0)
+        self.page_layout.setSpacing(14)
+
         browse = QWidget()
-        browse_layout = QHBoxLayout(browse)
-        browse_layout.setContentsMargins(24, 18, 24, 18)
-        browse_layout.setSpacing(20)
-        browse_layout.addLayout(left)
-        browse_layout.addWidget(scrollable(self.page_host), 1)
+        browse_layout = QVBoxLayout(browse)
+        browse_layout.setContentsMargins(0, 0, 0, 0)
+        browse_layout.setSpacing(0)
+        browse_layout.addWidget(toolbar)
+        columns = QHBoxLayout()
+        columns.setContentsMargins(20, 0, 20, 20)
+        columns.setSpacing(14)
+        columns.addWidget(index)
+        columns.addWidget(scrollable(self.page_host), 1)
+        browse_layout.addLayout(columns, 1)
 
         self.stack = QStackedWidget()
         self.stack.addWidget(browse)
@@ -136,20 +162,33 @@ class PagesView(QWidget):
     def _add_group(self, heading: str, pages) -> None:
         header = QListWidgetItem(heading)
         header.setFlags(Qt.ItemFlag.NoItemFlags)
+        font = header.font()
+        font.setPixelSize(11)
+        font.setWeight(QFont.Weight.DemiBold)
+        font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 0.3)
+        header.setFont(font)
         self.listing.addItem(header)
         for page in sorted(pages, key=lambda p: p.name):
             item = QListWidgetItem(page.name)
-            item.setData(Qt.ItemDataRole.UserRole, page.id)
+            item.setData(PAGE_ID, page.id)
             self.listing.addItem(item)
 
+    def _filter(self, text: str) -> None:
+        needle = text.strip().casefold()
+        for row in range(self.listing.count()):
+            item = self.listing.item(row)
+            if item.data(PAGE_ID):
+                item.setHidden(bool(needle) and needle not in item.text().casefold())
+
     def selected_pages(self) -> list[Page]:
-        return [self.library.page(item.data(Qt.ItemDataRole.UserRole)) for item in self.listing.selectedItems()]
+        return [self.library.page(item.data(PAGE_ID)) for item in self.listing.selectedItems()]
 
     def show_page(self, page_id: str) -> None:
         self._end_drill()
+        self.search.clear()
         for row in range(self.listing.count()):
             item = self.listing.item(row)
-            if item.data(Qt.ItemDataRole.UserRole) == page_id:
+            if item.data(PAGE_ID) == page_id:
                 self.listing.clearSelection()
                 self.listing.setCurrentItem(item)
                 item.setSelected(True)
@@ -160,58 +199,52 @@ class PagesView(QWidget):
         prompts = sum(len(page.recall) for page in pages)
         self.drill_button.setEnabled(prompts > 0)
         if len(pages) > 1:
-            self.drill_hint.setText(f"{len(pages)} Pages selected: {prompts} Recall prompts, shuffled.")
+            self.drill_hint.setText(f"{len(pages)} pages selected: {prompts} Recall prompts, shuffled.")
         else:
-            self.drill_hint.setText("Select several Pages (Cmd-click or Shift-click) to drill across them.")
+            self.drill_hint.setText("Select several pages (⌘-click or Shift-click) to drill across them.")
         current = self.listing.currentItem()
-        if current is not None and current.data(Qt.ItemDataRole.UserRole):
-            self._render(self.library.page(current.data(Qt.ItemDataRole.UserRole)))
+        if current is not None and current.data(PAGE_ID):
+            self._render(self.library.page(current.data(PAGE_ID)))
 
     def _render(self, page: Page) -> None:
-        while self.page_layout.count():
-            item = self.page_layout.takeAt(0)
-            if item.widget() is not None:
-                item.widget().deleteLater()
-            elif item.layout() is not None:
-                self._discard(item.layout())
-        header = QHBoxLayout()
-        header.addWidget(label(page.name, "h1", wrap=False))
-        header.addWidget(chip(page.kind.capitalize()))
-        header.addStretch(1)
-        self.page_layout.addLayout(header)
+        clear_layout(self.page_layout)
+        heading = QVBoxLayout()
+        heading.setContentsMargins(4, 0, 4, 4)
+        heading.setSpacing(12)
+        title = QHBoxLayout()
+        title.setSpacing(12)
+        title.addWidget(label(page.name, "h1", wrap=False))
+        title.addWidget(chip(page.kind.capitalize()), 0, Qt.AlignmentFlag.AlignVCenter)
+        title.addStretch(1)
+        heading.addLayout(title)
 
         if page.kind == "component":
             related = [self.library.mechanisms[m] for m in page.mechanisms]
-            caption = "Mechanisms inside it:"
+            caption = "Mechanisms inside it"
         else:
             related = [c for c in self.library.components.values() if page.id in c.mechanisms]
-            caption = "Used by:"
+            caption = "Used by"
         if related:
             row = QHBoxLayout()
+            row.setSpacing(8)
             row.addWidget(label(caption, "muted", wrap=False))
             for other in related:
-                button = QPushButton(other.name)
-                button.setObjectName("link")
-                button.clicked.connect(lambda _=False, page_id=other.id: self.show_page(page_id))
-                row.addWidget(button)
+                link = button(other.name, "chipLink")
+                link.clicked.connect(lambda _=False, page_id=other.id: self.show_page(page_id))
+                row.addWidget(link)
             row.addStretch(1)
-            self.page_layout.addLayout(row)
+            heading.addLayout(row)
+        self.page_layout.addLayout(heading)
 
         for section in page.sections:
             frame, box = card()
             box.addWidget(label(section.heading, "h2"))
-            for claim in section.claims:
-                box.addWidget(ClaimView(claim))
+            add_claims(box, section.claims)
             self.page_layout.addWidget(frame)
-        self.page_layout.addWidget(label(
-            f"{len(page.recall)} Recall prompts on this Page. Use the button on the left to drill them.", "muted"))
+        footer = label(f"{len(page.recall)} Recall prompts on this page.", "hint")
+        footer.setContentsMargins(4, 0, 4, 0)
+        self.page_layout.addWidget(footer)
         self.page_layout.addStretch(1)
-
-    def _discard(self, layout) -> None:
-        while layout.count():
-            item = layout.takeAt(0)
-            if item.widget() is not None:
-                item.widget().deleteLater()
 
     def start_drill(self) -> None:
         prompts = [prompt for page in self.selected_pages() for prompt in page.recall]
@@ -228,6 +261,6 @@ class PagesView(QWidget):
     def _end_drill(self) -> None:
         if self.drill is not None:
             self.stack.removeWidget(self.drill)
-            self.drill.deleteLater()
+            discard(self.drill)
             self.drill = None
         self.stack.setCurrentIndex(0)

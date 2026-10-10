@@ -8,17 +8,17 @@ from PyQt6.QtGui import (
     QBrush, QColor, QDrag, QFont, QFontMetricsF, QPainter, QPainterPath, QPainterPathStroker, QPen, QPolygonF,
 )
 from PyQt6.QtWidgets import (
-    QComboBox, QFormLayout, QGraphicsItem, QGraphicsPathItem, QGraphicsScene, QGraphicsView, QHBoxLayout,
-    QLineEdit, QListWidget, QListWidgetItem, QPlainTextEdit, QPushButton, QSpinBox, QVBoxLayout, QWidget,
+    QComboBox, QFrame, QGraphicsItem, QGraphicsPathItem, QGraphicsScene, QGraphicsView, QHBoxLayout,
+    QLabel, QLineEdit, QListWidget, QListWidgetItem, QScrollArea, QVBoxLayout, QWidget,
 )
 
 from ..content import Library
 from ..design import MODES, PARTITIONING, PATHS, PROTOCOLS, Block, Connection, Design
 from . import theme
-from .widgets import label
+from .widgets import EditorCard, Stepper, button, eyebrow, label, rule
 
 MIME = "application/x-sysdesign-component"
-BLOCK_W, BLOCK_H = 196.0, 68.0
+BLOCK_W, BLOCK_H = 196.0, 66.0
 HANDLE_R = 7.0
 
 
@@ -83,45 +83,56 @@ class BlockItem(QGraphicsItem):
         return self.mapToScene(self.body_rect().center())
 
     def boundingRect(self) -> QRectF:
-        return self.body_rect().adjusted(-2, -2, HANDLE_R + 4, 2)
+        return self.body_rect().adjusted(-6, -6, HANDLE_R + 6, 6)
 
     def paint(self, painter: QPainter, option, widget=None) -> None:
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         selected = self.isSelected()
-        painter.setPen(QPen(QColor(theme.ACCENT if selected else theme.BORDER), 2 if selected else 1))
-        painter.setBrush(QBrush(QColor(theme.RAISED)))
-        painter.drawRoundedRect(self.body_rect(), 8, 8)
+        body = self.body_rect()
+        if selected:
+            ring = QColor(theme.LINK)
+            ring.setAlphaF(0.28)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(ring)
+            painter.drawRoundedRect(body.adjusted(-4, -4, 4, 4), 17, 17)
+        painter.setPen(QPen(QColor(theme.LINK), 2) if selected else QPen(QColor(255, 255, 255, 30), 1))
+        painter.setBrush(QBrush(QColor(theme.NODE)))
+        painter.drawRoundedRect(body, 14, 14)
 
-        text_rect = self.body_rect().adjusted(12, 7, -12, -7)
+        summary = block_summary(self.block)
+        text_rect = body.adjusted(14, 10 if summary else 13, -14, -(9 if summary else 13))
         font = QFont(painter.font())
-        font.setPointSizeF(9)
+        font.setPixelSize(10)
+        font.setWeight(QFont.Weight.DemiBold)
         font.setCapitalization(QFont.Capitalization.AllUppercase)
+        font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 0.6)
         painter.setFont(font)
-        painter.setPen(QColor(theme.MUTED))
+        painter.setPen(QColor(theme.TEXT3))
         kind = QFontMetricsF(font).elidedText(self.component_name, Qt.TextElideMode.ElideRight, text_rect.width())
         painter.drawText(text_rect, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft, kind)
 
         font = QFont(painter.font())
         font.setCapitalization(QFont.Capitalization.MixedCase)
-        font.setPointSizeF(13)
-        font.setBold(True)
+        font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 0)
+        font.setPixelSize(14)
         painter.setFont(font)
         painter.setPen(QColor(theme.TEXT))
         name = QFontMetricsF(font).elidedText(self.block.name or self.component_name,
                                                Qt.TextElideMode.ElideRight, text_rect.width())
-        painter.drawText(text_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, name)
+        align = Qt.AlignmentFlag.AlignVCenter if summary else Qt.AlignmentFlag.AlignBottom
+        painter.drawText(text_rect, align | Qt.AlignmentFlag.AlignLeft, name)
 
-        font.setBold(False)
-        font.setPointSizeF(10)
-        painter.setFont(font)
-        painter.setPen(QColor(theme.MUTED))
-        summary = QFontMetricsF(font).elidedText(block_summary(self.block),
-                                                  Qt.TextElideMode.ElideRight, text_rect.width())
-        painter.drawText(text_rect, Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignLeft, summary)
+        if summary:
+            font.setWeight(QFont.Weight.Normal)
+            font.setPixelSize(11)
+            painter.setFont(font)
+            painter.setPen(QColor(theme.TEXT2))
+            line = QFontMetricsF(font).elidedText(summary, Qt.TextElideMode.ElideRight, text_rect.width())
+            painter.drawText(text_rect, Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignLeft, line)
 
         if not self.read_only and (self.hovered or selected):
-            painter.setPen(QPen(QColor(theme.BG), 2))
-            painter.setBrush(QBrush(QColor(theme.ACCENT)))
+            painter.setPen(QPen(QColor(theme.NODE), 2.5))
+            painter.setBrush(QBrush(QColor(theme.LINK)))
             painter.drawEllipse(self.handle_rect())
 
     def itemChange(self, change, value):
@@ -213,8 +224,9 @@ class ConnectionItem(QGraphicsPathItem):
         if self.path().isEmpty():
             return
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        color = QColor(theme.ACCENT if self.isSelected() else theme.MUTED)
-        pen = QPen(color, 2 if self.isSelected() else 1.5)
+        color = QColor(theme.LINK)
+        color.setAlphaF(1.0 if self.isSelected() else 0.7)
+        pen = QPen(color, 2.5 if self.isSelected() else 1.8)
         if self.connection.mode == "async":
             pen.setStyle(Qt.PenStyle.DashLine)
         painter.setPen(pen)
@@ -227,15 +239,15 @@ class ConnectionItem(QGraphicsPathItem):
         text = connection_summary(self.connection)
         if text:
             font = QFont(painter.font())
-            font.setPointSizeF(9.5)
+            font.setPixelSize(11)
             painter.setFont(font)
             metrics = QFontMetricsF(font)
             box = metrics.boundingRect(text).adjusted(-5, -2, 5, 2)
             box.moveCenter(self.label_at)
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QBrush(QColor(theme.BG)))
+            painter.setBrush(QBrush(QColor(theme.CANVAS)))
             painter.drawRoundedRect(box, 4, 4)
-            painter.setPen(QColor(theme.TEXT if self.isSelected() else theme.MUTED))
+            painter.setPen(QColor(theme.TEXT if self.isSelected() else theme.TEXT2))
             painter.drawText(box, Qt.AlignmentFlag.AlignCenter, text)
 
 
@@ -357,7 +369,7 @@ class DesignScene(QGraphicsScene):
             if item is not None and item.handle_scene_rect().contains(event.scenePos()):
                 self._drag_source = item
                 start = item.mapToScene(item.handle_rect().center())
-                pen = QPen(QColor(theme.ACCENT), 1.5, Qt.PenStyle.DashLine)
+                pen = QPen(QColor(theme.LINK), 1.5, Qt.PenStyle.DashLine)
                 self._drag_line = self.addLine(QLineF(start, start), pen)
                 event.accept()
                 return
@@ -400,10 +412,10 @@ class CanvasView(QGraphicsView):
         self.setRenderHint(QPainter.RenderHint.Antialiasing)
         self.setRenderHint(QPainter.RenderHint.TextAntialiasing)
         self.setViewportUpdateMode(QGraphicsView.ViewportUpdateMode.FullViewportUpdate)
-        if scene.read_only:
-            self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-            self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        else:
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        if not scene.read_only:
             self.setAcceptDrops(True)
             self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
             self.setSceneRect(-2000, -2000, 4000, 4000)
@@ -424,24 +436,40 @@ class CanvasView(QGraphicsView):
         if self.design_scene.read_only:
             self.fit()
 
+    def paintEvent(self, event) -> None:
+        super().paintEvent(event)
+        # The viewport is square; paint the window colour over its corners to round the card.
+        painter = QPainter(self.viewport())
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        frame = QRectF(self.viewport().rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        outside = QPainterPath()
+        outside.addRect(QRectF(self.viewport().rect()))
+        inside = QPainterPath()
+        inside.addRoundedRect(frame, 16, 16)
+        painter.fillPath(outside.subtracted(inside), QColor(theme.WIN))
+        painter.setPen(QPen(QColor(255, 255, 255, 23), 1))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(frame, 16, 16)
+
     def drawBackground(self, painter: QPainter, rect: QRectF) -> None:
-        painter.fillRect(rect, QColor(theme.BG))
-        painter.setPen(QPen(QColor(theme.BORDER), 1.5))
-        step = 24
+        painter.fillRect(rect, QColor(theme.CANVAS))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(theme.DOT))
+        step = 20
         left = int(math.floor(rect.left() / step)) * step
         top = int(math.floor(rect.top() / step)) * step
         x = left
         while x < rect.right():
             y = top
             while y < rect.bottom():
-                painter.drawPoint(QPointF(x, y))
+                painter.drawEllipse(QPointF(x, y), 1, 1)
                 y += step
             x += step
 
     def drawForeground(self, painter: QPainter, rect: QRectF) -> None:
         if self.design_scene.read_only or self.design_scene.design.blocks:
             return
-        painter.setPen(QColor(theme.MUTED))
+        painter.setPen(QColor(theme.TEXT3))
         painter.drawText(
             self.mapToScene(self.viewport().rect()).boundingRect(),
             Qt.AlignmentFlag.AlignCenter,
@@ -480,7 +508,8 @@ class Palette(QListWidget):
     def __init__(self, library: Library):
         super().__init__()
         self.setDragEnabled(True)
-        self.setFixedWidth(178)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setTextElideMode(Qt.TextElideMode.ElideRight)
         for page in sorted(library.components.values(), key=lambda p: p.name):
             item = QListWidgetItem(page.name)
             item.setData(Qt.ItemDataRole.UserRole, page.id)
@@ -509,74 +538,108 @@ class Inspector(QWidget):
     def __init__(self, library: Library):
         super().__init__()
         self.library = library
-        self.setFixedWidth(262)
-        self.outer = QVBoxLayout(self)
-        self.outer.setContentsMargins(0, 0, 0, 0)
+        self.setFixedWidth(276)
+        # Scrolls when short on height, so revealing the Checks can shrink the canvas row.
+        self.area = QScrollArea()
+        self.area.setWidgetResizable(True)
+        self.area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(self.area)
         self.body: QWidget | None = None
         self.show_target(None)
 
     def show_target(self, target: Block | Connection | None) -> None:
-        if self.body is not None:
-            self.outer.removeWidget(self.body)
-            self.body.deleteLater()
         self.body = QWidget()
         layout = QVBoxLayout(self.body)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(10)
+        layout.setSpacing(12)
         if isinstance(target, Block):
             self._block_form(layout, target)
         elif isinstance(target, Connection):
             self._connection_form(layout, target)
         else:
-            layout.addWidget(label("Properties", "h3"))
-            layout.addWidget(label("Select one Block or Connection to edit it.", "muted"))
+            self._heading(layout, "Properties", "Nothing selected")
+            layout.addWidget(label("Select one block or connection to edit it.", "muted"))
         layout.addStretch(1)
-        self.outer.addWidget(self.body)
+        self.area.setWidget(self.body)
+
+    @staticmethod
+    def _heading(layout: QVBoxLayout, title: str, subtitle: str) -> None:
+        column = QVBoxLayout()
+        column.setContentsMargins(6, 2, 6, 0)
+        column.setSpacing(1)
+        column.addWidget(label(title, "h2", wrap=False))
+        column.addWidget(label(subtitle, "toolbarSubtitle", wrap=False))
+        layout.addLayout(column)
+
+    @staticmethod
+    def _rows(layout: QVBoxLayout, rows) -> None:
+        frame = QFrame()
+        frame.setObjectName("card")
+        box = QVBoxLayout(frame)
+        box.setContentsMargins(14, 6, 14, 6)
+        box.setSpacing(0)
+        for index, (caption, field) in enumerate(rows):
+            if index:
+                box.addWidget(rule())
+            row = QHBoxLayout()
+            row.setContentsMargins(0, 8, 0, 8)
+            row.setSpacing(12)
+            name = QLabel(caption)
+            name.setObjectName("fieldLabel")
+            name.setFixedWidth(92)
+            row.addWidget(name)
+            row.addWidget(field, 1)
+            box.addLayout(row)
+        layout.addWidget(frame)
 
     def _block_form(self, layout: QVBoxLayout, block: Block) -> None:
         page = self.library.components.get(block.component)
-        layout.addWidget(label(f"Block: {page.name if page else block.component}", "h3"))
-        form = QFormLayout()
-        form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
-        form.addRow("Name", self._text(block, "name"))
-        form.addRow("Technology", self._text(block, "technology", "e.g. Redis"))
-        form.addRow("Instances", self._number(block, "instances"))
-        form.addRow("Replication", self._number(block, "replication_factor"))
+        self._heading(layout, page.name if page else block.component, "Block")
+        name = self._text(block, "name")
+        technology = self._text(block, "technology", "e.g. Redis")
         key = self._text(block, "partition_key", "e.g. user_id")
         key.setEnabled(block.partitioning != "none")
         partitioning = self._choice(block, "partitioning", PARTITIONING)
         partitioning.currentTextChanged.connect(lambda value: key.setEnabled(value != "none"))
-        form.addRow("Partitioning", partitioning)
-        form.addRow("Partition key", key)
+        rows = [
+            ("Name", name),
+            ("Technology", technology),
+            ("Instances", self._number(block, "instances")),
+            ("Replication", self._number(block, "replication_factor")),
+            ("Partitioning", partitioning),
+            ("Partition key", key),
+        ]
         for extra in (page.extras if page else ()):
-            form.addRow(extra.label, self._extra(block, extra.key, extra.options))
-        layout.addLayout(form)
-        note = QPlainTextEdit(block.note)
-        note.setPlaceholderText("Note")
-        note.setFixedHeight(64)
-        note.textChanged.connect(lambda: self._set(block, "note", note.toPlainText()))
+            rows.append((extra.label, self._extra(block, extra.key, extra.options)))
+        self._rows(layout, rows)
+
+        note = EditorCard("Note")
+        note.setFixedHeight(84)
+        note.editor.setPlainText(block.note)
+        note.editor.textChanged.connect(lambda: self._set(block, "note", note.editor.toPlainText()))
         layout.addWidget(note)
+
         buttons = QHBoxLayout()
-        open_page = QPushButton("Open Page")
+        buttons.setSpacing(10)
+        open_page = button("Open Page")
         open_page.clicked.connect(lambda: self.open_page.emit(block.component))
-        delete = QPushButton("Delete")
+        delete = button("Delete", "pillDanger")
         delete.clicked.connect(self.delete_requested.emit)
-        buttons.addWidget(open_page)
-        buttons.addWidget(delete)
+        buttons.addWidget(open_page, 1)
+        buttons.addWidget(delete, 1)
         layout.addLayout(buttons)
 
     def _connection_form(self, layout: QVBoxLayout, connection: Connection) -> None:
-        layout.addWidget(label("Connection", "h3"))
-        form = QFormLayout()
-        form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
-        form.addRow("Mode", self._choice(connection, "mode", MODES))
-        protocol = self._choice(connection, "protocol", PROTOCOLS, editable=True)
-        form.addRow("Protocol", protocol)
-        form.addRow("Path", self._choice(connection, "path", PATHS))
-        form.addRow("Label", self._text(connection, "label"))
-        layout.addLayout(form)
-        layout.addWidget(label("Solid line: sync. Dashed line: async.", "muted"))
-        delete = QPushButton("Delete")
+        self._heading(layout, "Connection", "Solid line is sync, dashed is async")
+        self._rows(layout, [
+            ("Mode", self._choice(connection, "mode", MODES)),
+            ("Protocol", self._choice(connection, "protocol", PROTOCOLS, editable=True)),
+            ("Path", self._choice(connection, "path", PATHS)),
+            ("Label", self._text(connection, "label")),
+        ])
+        delete = button("Delete", "pillDanger")
         delete.clicked.connect(self.delete_requested.emit)
         layout.addWidget(delete)
 
@@ -590,12 +653,10 @@ class Inspector(QWidget):
         edit.textChanged.connect(lambda text: self._set(target, attribute, text))
         return edit
 
-    def _number(self, target, attribute: str) -> QSpinBox:
-        spin = QSpinBox()
-        spin.setRange(1, 100000)
-        spin.setValue(getattr(target, attribute))
-        spin.valueChanged.connect(lambda value: self._set(target, attribute, value))
-        return spin
+    def _number(self, target, attribute: str) -> Stepper:
+        stepper = Stepper(getattr(target, attribute))
+        stepper.valueChanged.connect(lambda value: self._set(target, attribute, value))
+        return stepper
 
     def _choice(self, target, attribute: str, options, editable: bool = False) -> QComboBox:
         combo = QComboBox()
@@ -632,17 +693,25 @@ class CanvasEditor(QWidget):
         super().__init__()
         self.scene = DesignScene(library)
         self.view = CanvasView(self.scene)
+        self.view.setMinimumWidth(320)
         self.palette = Palette(library)
         self.inspector = Inspector(library)
 
-        left = QVBoxLayout()
-        left.setSpacing(6)
-        left.addWidget(label("Components", "h3"))
-        left.addWidget(self.palette, 1)
+        components = QFrame()
+        components.setObjectName("card")
+        components.setFixedWidth(188)
+        column = QVBoxLayout(components)
+        column.setContentsMargins(0, 12, 0, 0)
+        column.setSpacing(6)
+        heading = eyebrow("Components")
+        heading.setContentsMargins(16, 0, 16, 0)
+        column.addWidget(heading)
+        column.addWidget(self.palette, 1)
+
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
-        layout.addLayout(left)
+        layout.setSpacing(14)
+        layout.addWidget(components)
         layout.addWidget(self.view, 1)
         layout.addWidget(self.inspector)
 

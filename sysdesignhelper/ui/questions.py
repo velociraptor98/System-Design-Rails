@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
 
 from ..content import CATEGORIES, Library, Question
 from .session import SessionView
-from .widgets import chip, label, scrollable
+from .widgets import Toolbar, chip, clear_layout, discard, label, scrollable
 
 
 def confirm_discard(parent: QWidget) -> bool:
@@ -27,9 +27,8 @@ class QuestionCard(QFrame):
         super().__init__()
         self.question = question
         self.setObjectName("questionCard")
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 14, 16, 14)
+        layout.setContentsMargins(20, 16, 20, 16)
         layout.setSpacing(8)
         title = label(question.title, "h2")
         title.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
@@ -42,8 +41,6 @@ class QuestionCard(QFrame):
         row.addWidget(chip(question.category.capitalize()))
         for tag in question.company_tags:
             row.addWidget(chip(f"{tag.company}: reported", "chipWarn"))
-        if not question.company_tags:
-            row.addWidget(chip("No company report found"))
         row.addStretch(1)
         layout.addLayout(row)
 
@@ -68,14 +65,9 @@ class QuestionsView(QWidget):
 
         self.list_page = QWidget()
         layout = QVBoxLayout(self.list_page)
-        layout.setContentsMargins(24, 18, 24, 18)
-        layout.setSpacing(12)
-        layout.addWidget(label("Questions", "h1"))
-        layout.addWidget(label(
-            "Pick a Question and work through its six Stages. Company tags come from LeetCode candidate "
-            "reports and are not verified.", "muted"))
-
-        filters = QHBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        toolbar = Toolbar("Questions")
         self.category = QComboBox()
         self.category.addItem("All categories", "")
         for category in CATEGORIES:
@@ -84,16 +76,25 @@ class QuestionsView(QWidget):
         self.company.addItem("All companies", "")
         for company in library.companies():
             self.company.addItem(company, company)
-        filters.addWidget(self.category)
-        filters.addWidget(self.company)
-        filters.addStretch(1)
-        layout.addLayout(filters)
+        for combo in (self.category, self.company):
+            combo.setMinimumWidth(150)
+            toolbar.add_action(combo)
+        layout.addWidget(toolbar)
 
+        body = QVBoxLayout()
+        body.setContentsMargins(20, 0, 20, 20)
+        body.setSpacing(14)
+        note = label(
+            "Pick a Question and work through its six Stages. Company tags come from LeetCode candidate "
+            "reports and are not verified.", "muted")
+        note.setContentsMargins(4, 0, 4, 0)
+        body.addWidget(note)
         self.cards_host = QWidget()
         self.cards_layout = QVBoxLayout(self.cards_host)
-        self.cards_layout.setContentsMargins(0, 0, 12, 0)
+        self.cards_layout.setContentsMargins(0, 0, 10, 0)
         self.cards_layout.setSpacing(12)
-        layout.addWidget(scrollable(self.cards_host), 1)
+        body.addWidget(scrollable(self.cards_host), 1)
+        layout.addLayout(body, 1)
         self.stack.addWidget(self.list_page)
 
         self.category.currentIndexChanged.connect(self._refresh)
@@ -109,10 +110,7 @@ class QuestionsView(QWidget):
         ]
 
     def _refresh(self) -> None:
-        while self.cards_layout.count():
-            item = self.cards_layout.takeAt(0)
-            if item.widget() is not None:
-                item.widget().deleteLater()
+        clear_layout(self.cards_layout)
         questions = self.visible_questions()
         for question in questions:
             question_card = QuestionCard(question)
@@ -140,7 +138,7 @@ class QuestionsView(QWidget):
     def _drop_session(self) -> None:
         if self.session is not None:
             self.stack.removeWidget(self.session)
-            self.session.deleteLater()
+            discard(self.session)
             self.session = None
         self.stack.setCurrentWidget(self.list_page)
 

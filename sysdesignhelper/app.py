@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QPalette
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
@@ -11,8 +12,10 @@ from .ui.main_window import MainWindow
 
 
 def apply_theme(app: QApplication) -> None:
-    # Fusion ignores the macOS light/dark setting, which is what keeps the app dark always.
+    # Fusion ignores the macOS light/dark setting, which is what keeps the app dark always;
+    # the colour scheme hint does the same for the native window chrome.
     app.setStyle("Fusion")
+    app.styleHints().setColorScheme(Qt.ColorScheme.Dark)
     palette = QPalette()
     for role, color in (
         (QPalette.ColorRole.Window, theme.BG),
@@ -26,8 +29,8 @@ def apply_theme(app: QApplication) -> None:
         (QPalette.ColorRole.ToolTipBase, theme.RAISED),
         (QPalette.ColorRole.ToolTipText, theme.TEXT),
         (QPalette.ColorRole.Highlight, theme.ACCENT),
-        (QPalette.ColorRole.HighlightedText, "#0d1117"),
-        (QPalette.ColorRole.Link, theme.ACCENT),
+        (QPalette.ColorRole.HighlightedText, "#ffffff"),
+        (QPalette.ColorRole.Link, theme.LINK),
     ):
         palette.setColor(role, QColor(color))
     app.setPalette(palette)
