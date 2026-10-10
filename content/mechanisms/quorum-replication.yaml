@@ -1,0 +1,48 @@
+id: quorum-replication
+name: Quorum replication
+sections:
+  - heading: Replicating each item
+    claims:
+      - text: >
+          To achieve high availability and durability, Dynamo replicates each data item at N
+          hosts, where N is configured per instance.
+        cite: [dynamo]
+      - text: >
+          Each key is assigned to a coordinator node, which stores the key locally and replicates
+          it at the N-1 clockwise successor nodes on the ring.
+        cite: [dynamo]
+  - heading: R, W and N
+    claims:
+      - text: >
+          R is the minimum number of nodes that must participate in a successful read, and W is
+          the minimum number that must participate in a successful write.
+        cite: [dynamo]
+      - text: >
+          Setting R and W such that R + W > N yields a quorum-like system.
+        cite: [dynamo]
+      - text: >
+          The latency of a get or put is dictated by the slowest of the R or W replicas, so R and
+          W are usually configured to be less than N to provide better latency.
+        cite: [dynamo]
+      - text: >
+          The common (N, R, W) configuration used by several instances of Dynamo is (3, 2, 2).
+        cite: [dynamo]
+recall:
+  - prompt: What do N, R and W mean, and what relation between them gives a quorum-like system?
+    answer:
+      - text: >
+          N is the number of hosts each item is replicated at; R and W are the minimum numbers of
+          nodes that must participate in a successful read and write.
+        cite: [dynamo]
+      - text: R + W > N yields a quorum-like system.
+        cite: [dynamo]
+  - prompt: Why are R and W usually set below N?
+    answer:
+      - text: >
+          Because the latency of an operation is dictated by the slowest of the R or W replicas,
+          so smaller values give better latency.
+        cite: [dynamo]
+  - prompt: What (N, R, W) configuration does the Dynamo paper report as common?
+    answer:
+      - text: (3, 2, 2).
+        cite: [dynamo]

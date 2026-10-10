@@ -1,0 +1,85 @@
+id: rate-limiter
+name: Rate limiter
+mechanisms: [token-bucket, sliding-window-counter]
+extras:
+  - key: algorithm
+    label: Algorithm
+    options: [token-bucket, sliding-window, fixed-window]
+sections:
+  - heading: What it is, and what it is not
+    claims:
+      - text: >
+          A rate limiter is used to control the rate of traffic sent or received on the network.
+        cite: [stripe-rate-limiters]
+      - text: >
+          A load shedder is different: it makes its decisions based on the whole state of the
+          system, not on the user who is making the request.
+        cite: [stripe-rate-limiters]
+  - heading: The four limiters Stripe runs
+    claims:
+      - text: >
+          A request rate limiter restricts each user to N requests per second. Stripe reports it
+          rejecting millions of requests in a month, especially test mode requests.
+        cite: [stripe-rate-limiters]
+      - text: >
+          A concurrent requests limiter manages resource contention for CPU-intensive API
+          endpoints, and is triggered much less often.
+        cite: [stripe-rate-limiters]
+      - text: >
+          A fleet usage load shedder always reserves a fraction of the infrastructure for
+          critical requests: non-critical requests over their 80% allocation are rejected with
+          status code 503.
+        cite: [stripe-rate-limiters]
+      - text: >
+          A worker utilization load shedder is the fourth, and rejected only about 100 requests
+          in the month Stripe describes.
+        cite: [stripe-rate-limiters]
+  - heading: Telling the client
+    claims:
+      - text: >
+          The 429 (Too Many Requests) status code indicates that the user has sent too many
+          requests in a given amount of time. The response SHOULD explain the condition and MAY
+          include a Retry-After header saying how long to wait.
+        cite: [rfc6585]
+      - text: A response with the 429 status code MUST NOT be stored by a cache.
+        cite: [rfc6585]
+  - heading: Where the counters live
+    claims:
+      - text: Stripe implements its rate limiters using Redis.
+        cite: [stripe-rate-limiters]
+      - text: >
+          Cloudflare concluded that reporting all counters to a single central point is not
+          realistic. Because anycast routing sends the traffic from one IP address to the same
+          point of presence, it built an isolated counting system inside each one.
+        cite: [cloudflare-counting]
+  - heading: Failing safely
+    claims:
+      - text: >
+          Stripe advises making sure that if there are bugs in the rate limiting code, or if
+          Redis goes down, requests are not affected.
+        cite: [stripe-rate-limiters]
+      - text: >
+          Stripe also advises dark launching each rate limiter to watch the traffic it would
+          block before enforcing it.
+        cite: [stripe-rate-limiters]
+recall:
+  - prompt: What is the difference between a rate limiter and a load shedder?
+    answer:
+      - text: >
+          A rate limiter controls the rate of traffic per user; a load shedder decides from the
+          whole state of the system, not from who is asking.
+        cite: [stripe-rate-limiters]
+  - prompt: Name the four limiters Stripe runs.
+    answer:
+      - text: >
+          Request rate limiter, concurrent requests limiter, fleet usage load shedder, and worker
+          utilization load shedder.
+        cite: [stripe-rate-limiters]
+  - prompt: Which status code signals rate limiting, and what header may accompany it?
+    answer:
+      - text: 429 (Too Many Requests), optionally with Retry-After.
+        cite: [rfc6585]
+  - prompt: What should happen to traffic if the limiter's Redis goes down, according to Stripe?
+    answer:
+      - text: Requests should not be affected.
+        cite: [stripe-rate-limiters]

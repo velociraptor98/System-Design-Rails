@@ -1,0 +1,50 @@
+id: price-time-priority
+name: Price-time priority
+sections:
+  - heading: The limit order book
+    claims:
+      - text: >
+          Nasdaq accepts limit orders and executes matching orders when possible. Non-matching
+          orders may be added to the limit order book, a database of available limit orders,
+          where they wait to be matched in price-time priority.
+        cite: [ouch]
+  - heading: Time priority at a price
+    claims:
+      - text: >
+          In the FIFO step of CME Globex matching, resting orders are matched in timestamp order
+          only: in the order in which they were received.
+        cite: [cme-matching]
+      - text: >
+          On CME Globex a modified order loses its timestamp priority when its working quantity
+          is increased, its price is changed, or its account number is changed.
+        cite: [cme-matching]
+  - heading: Tracking one order through the book
+    claims:
+      - text: >
+          Nasdaq's market data feed gives each order added to the displayable book a day-unique
+          Order Reference Number, and every later message that modifies the order carries that
+          number.
+        cite: [itch]
+      - text: >
+          Several Order Executed messages can arrive for the same order if it is executed in
+          parts, and their effects are cumulative. When an order's displayed shares reach zero it
+          is dead and should be removed from the book.
+        cite: [itch]
+recall:
+  - prompt: What happens to a limit order that does not match on arrival at Nasdaq?
+    answer:
+      - text: >
+          It may be added to the limit order book, where it waits to be matched in price-time
+          priority.
+        cite: [ouch]
+  - prompt: Which modifications cost an order its time priority on CME Globex?
+    answer:
+      - text: >
+          Increasing its working quantity, changing its price, or changing its account number.
+        cite: [cme-matching]
+  - prompt: How does a market data subscriber know an order has left the book?
+    answer:
+      - text: >
+          Modify messages for an Order Reference Number are cumulative; when the displayed shares
+          reach zero the order is dead and should be removed.
+        cite: [itch]

@@ -1,0 +1,66 @@
+id: hash-slots
+name: Hash slots (Redis Cluster)
+sections:
+  - heading: Mapping keys to nodes
+    claims:
+      - text: >
+          Redis Cluster splits the key space into 16384 slots, and a key's slot is
+          CRC16(key) mod 16384.
+        cite: [redis-cluster]
+      - text: Each master node handles a subset of the 16384 hash slots.
+        cite: [redis-cluster]
+      - text: >
+          Hash tags are a way to ensure that multiple keys are allocated in the same hash slot,
+          which is what makes multi-key operations possible.
+        cite: [redis-cluster]
+  - heading: Finding the right node
+    claims:
+      - text: >
+          There are no proxies. A node that receives a query for a slot it does not serve looks
+          up which node does and replies to the client with a MOVED error.
+        cite: [redis-cluster]
+  - heading: Changing the cluster
+    claims:
+      - text: >
+          Nodes can be added and removed while the cluster is running. Both are the same
+          operation: moving a hash slot from one node to another.
+        cite: [redis-cluster]
+  - heading: Replication and what can be lost
+    claims:
+      - text: >
+          Redis Cluster uses asynchronous replication between nodes, so there is always a window
+          of time in which it is possible to lose writes during partitions.
+        cite: [redis-cluster]
+      - text: >
+          A write may reach a master and be acknowledged to the client without having been
+          propagated to its replicas; if the master then dies, the write is lost.
+        cite: [redis-cluster]
+      - text: >
+          When a master fails, its replicas can start an election; only one wins and promotes
+          itself to master, with the other masters voting.
+        cite: [redis-cluster]
+      - text: >
+          The cluster survives partitions in which the majority of master nodes are reachable and
+          there is at least one reachable replica for every master that is no longer reachable.
+        cite: [redis-cluster]
+recall:
+  - prompt: How does Redis Cluster compute which slot a key belongs to?
+    answer:
+      - text: CRC16(key) mod 16384.
+        cite: [redis-cluster]
+  - prompt: A client sends a command to a node that does not serve the key's slot. What happens?
+    answer:
+      - text: >
+          The node does not proxy the request; it replies with a MOVED error pointing at the node
+          that serves the slot.
+        cite: [redis-cluster]
+  - prompt: Why can Redis Cluster lose a write it has acknowledged?
+    answer:
+      - text: >
+          Replication is asynchronous, so a master can reply to the client and die before the
+          write reaches its replicas.
+        cite: [redis-cluster]
+  - prompt: How is a node added to a running Redis Cluster?
+    answer:
+      - text: By moving hash slots to it from other nodes, while the cluster keeps running.
+        cite: [redis-cluster]

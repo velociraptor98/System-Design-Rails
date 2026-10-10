@@ -1,0 +1,131 @@
+id: cache
+name: Cache
+mechanisms: [cache-eviction, consistent-hashing, hash-slots]
+extras:
+  - key: eviction_policy
+    label: Eviction policy
+    options: [noeviction, allkeys-lru, allkeys-lfu, allkeys-random, volatile-lru, volatile-lfu, volatile-random, volatile-ttl]
+sections:
+  - heading: Why cache
+    claims:
+      - text: >
+          Facebook observes that its users consume an order of magnitude more content than they
+          create, which gives a workload dominated by fetching data and suggests that caching can
+          have significant advantages.
+        cite: [memcache-fb]
+  - heading: The look-aside pattern
+    claims:
+      - text: >
+          Facebook uses memcache as a demand-filled look-aside cache. A web server first requests
+          the value from the cache by key; if it is not cached, the server retrieves the data
+          from the database and populates the cache with the key-value pair.
+        cite: [memcache-fb]
+      - text: >
+          For a write, the web server issues the statement to the database and then sends a
+          delete to the cache, which invalidates any stale data.
+        cite: [memcache-fb]
+      - text: >
+          Facebook deletes cached data instead of updating it because deletes are idempotent.
+        cite: [memcache-fb]
+      - text: >
+          The cache is not the authoritative source of the data and is therefore allowed to evict
+          cached data.
+        cite: [memcache-fb]
+  - heading: Two failure modes, and leases
+    claims:
+      - text: >
+          A stale set occurs when a web server sets a value in the cache that does not reflect
+          the latest value that should be cached, which can happen when concurrent updates are
+          reordered.
+        cite: [memcache-fb]
+      - text: >
+          A thundering herd happens when a key undergoes heavy read and write activity: as writes
+          repeatedly invalidate the recently set values, many reads default to the more costly
+          path.
+        cite: [memcache-fb]
+      - text: >
+          Facebook's lease mechanism addresses both. On a miss the cache gives the client a
+          64-bit token bound to the key; the client presents it when setting the value, and the
+          set is refused if a delete for that key has invalidated the token in the meantime.
+        cite: [memcache-fb]
+  - heading: Running out of memory
+    claims:
+      - text: >
+          Redis evicts keys according to a configured policy when memory use exceeds the limit;
+          under the noeviction policy it returns an error for commands that would add data.
+        cite: [redis-eviction]
+  - heading: Spreading keys over servers
+    claims:
+      - text: >
+          Facebook provisions hundreds of memcached servers in a cluster and distributes items
+          across them through consistent hashing.
+        cite: [memcache-fb]
+  - heading: Transport and routing at Facebook
+    claims:
+      - text: >
+          Facebook's web servers use UDP for get requests to reduce latency and overhead, and
+          perform set and delete operations over TCP through mcrouter, a proxy that presents a
+          memcached server interface and routes requests to other servers.
+        cite: [memcache-fb]
+  - heading: When a cache server fails
+    claims:
+      - text: >
+          Facebook dedicates a small set of machines named Gutter, about 1% of the memcached
+          servers in a cluster, to take over the responsibilities of a few failed servers.
+        cite: [memcache-fb]
+      - text: >
+          A client that receives no response to a get assumes the server has failed and issues
+          the request again to the Gutter pool; if that misses, it queries the database and
+          inserts the result into Gutter.
+        cite: [memcache-fb]
+      - text: >
+          Entries in Gutter expire quickly, which removes the need for Gutter invalidations at
+          the cost of slightly stale data.
+        cite: [memcache-fb]
+      - text: >
+          Facebook chose this over rehashing keys among the remaining servers, which risks
+          cascading failures because key access is non-uniform: a single key can account for 20%
+          of a server's requests.
+        cite: [memcache-fb]
+      - text: >
+          Facebook reports that Gutter reduces the rate of client-visible failures by 99% and
+          converts 10% to 25% of failures into hits each day.
+        cite: [memcache-fb]
+recall:
+  - prompt: Describe the read path and the write path of a look-aside cache.
+    answer:
+      - text: >
+          Read: ask the cache; on a miss, read the database and populate the cache. Write: update
+          the database, then delete the key from the cache.
+        cite: [memcache-fb]
+  - prompt: Why delete a cached value on write instead of updating it?
+    answer:
+      - text: Because deletes are idempotent.
+        cite: [memcache-fb]
+  - prompt: What is a stale set, and how do leases prevent it?
+    answer:
+      - text: >
+          A set that does not reflect the latest value, caused by reordered concurrent updates.
+        cite: [memcache-fb]
+      - text: >
+          The cache hands out a token on a miss and refuses a set whose token was invalidated by
+          a delete.
+        cite: [memcache-fb]
+  - prompt: What is a thundering herd?
+    answer:
+      - text: >
+          Heavy reads and writes on one key: writes keep invalidating the value, so many reads
+          fall through to the more costly path.
+        cite: [memcache-fb]
+  - prompt: A memcached server stops responding. What does Facebook's client do?
+    answer:
+      - text: >
+          It reissues the get to the Gutter pool; on a miss there it queries the database and
+          inserts the result into Gutter.
+        cite: [memcache-fb]
+  - prompt: Why not rehash a failed server's keys onto the remaining servers?
+    answer:
+      - text: >
+          Key access is non-uniform, so the server that inherits a hot key might itself become
+          overloaded, risking cascading failures.
+        cite: [memcache-fb]

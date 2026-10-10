@@ -1,0 +1,47 @@
+id: write-ahead-log
+name: Write-ahead log
+sections:
+  - heading: The rule
+    claims:
+      - text: >
+          The central concept of write-ahead logging is that changes to data files must be
+          written only after those changes have been logged, that is, after the log records
+          describing them have been flushed to permanent storage.
+        cite: [postgres-wal]
+  - heading: What it buys
+    claims:
+      - text: >
+          Data pages do not need to be flushed to disk on every transaction commit, because after
+          a crash any changes not yet applied to the data pages can be redone from the log
+          records. This is roll-forward recovery, also known as REDO.
+        cite: [postgres-wal]
+      - text: >
+          It significantly reduces the number of disk writes, because only the log file needs to
+          be flushed to guarantee that a transaction is committed, not every data file the
+          transaction changed.
+        cite: [postgres-wal]
+      - text: >
+          The log file is written sequentially, so syncing it costs much less than flushing the
+          data pages, and one fsync of the log may suffice to commit many small concurrent
+          transactions.
+        cite: [postgres-wal]
+      - text: >
+          The log also makes online backup and point-in-time recovery possible.
+        cite: [postgres-wal]
+recall:
+  - prompt: State the write-ahead logging rule.
+    answer:
+      - text: >
+          Changes to data files must be written only after the log records describing them have
+          been flushed to permanent storage.
+        cite: [postgres-wal]
+  - prompt: Why does a write-ahead log make commits cheaper, not more expensive?
+    answer:
+      - text: >
+          Only the log file must be flushed to commit, not every changed data file; the log is
+          written sequentially; and one fsync may commit many concurrent transactions.
+        cite: [postgres-wal]
+  - prompt: After a crash, how are committed changes that never reached the data pages recovered?
+    answer:
+      - text: They are redone from the log records (roll-forward recovery, REDO).
+        cite: [postgres-wal]
