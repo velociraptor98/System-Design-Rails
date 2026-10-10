@@ -100,11 +100,11 @@ architecture:
       - {id: web, component: service, name: Web server, instances: 100, x: 0, y: 150,
          note: "The instance counts here are placeholders; the paper says hundreds of memcached servers per cluster."}
       - {id: mc, component: cache, name: Memcached pool, technology: memcached, instances: 100,
-         x: 380, y: 0, extras: {eviction_policy: allkeys-lru}}
+         x: 520, y: 0, extras: {eviction_policy: allkeys-lru}}
       - {id: gutter, component: cache, name: Gutter pool, technology: memcached, instances: 2,
-         x: 380, y: 150, extras: {eviction_policy: volatile-ttl}}
+         x: 520, y: 150, extras: {eviction_policy: volatile-ttl}}
       - {id: db, component: database, name: Database, technology: MySQL, replication_factor: 2,
-         x: 380, y: 300}
+         x: 520, y: 300}
     connections:
       - {from: web, to: mc, mode: sync, protocol: UDP, path: both, label: "get; set/delete via TCP"}
       - {from: web, to: gutter, mode: sync, protocol: UDP, path: read, label: retry when no reply}

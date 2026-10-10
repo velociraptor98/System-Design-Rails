@@ -179,8 +179,13 @@ class ConnectionItem(QGraphicsPathItem):
             end - QPointF(math.cos(angle - 0.45) * size, math.sin(angle - 0.45) * size),
             end - QPointF(math.cos(angle + 0.45) * size, math.sin(angle + 0.45) * size),
         ])
-        # Off-centre, so the labels of A->B and B->A sit at different points along the pair.
-        self.label_at = start + (end - start) * 0.4
+        # Off-centre only when B->A also exists, so the two labels of the pair do not collide.
+        scene = self.scene()
+        paired = scene is not None and any(
+            c.source == self.connection.target and c.target == self.connection.source
+            for c in scene.design.connections
+        )
+        self.label_at = start + (end - start) * (0.4 if paired else 0.5)
 
     @staticmethod
     def _exit_point(center: QPointF, inside: QPointF, toward: QPointF) -> QPointF:
@@ -338,6 +343,9 @@ class DesignScene(QGraphicsScene):
                               self.block_items[connection.target], self.read_only)
         self.addItem(item)
         self.connection_items[connection.id] = item
+        for other in self.connection_items.values():
+            if {other.connection.source, other.connection.target} == {connection.source, connection.target}:
+                other.update_path()
         return item
 
     def _block_at(self, pos: QPointF) -> BlockItem | None:

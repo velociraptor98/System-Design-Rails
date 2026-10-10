@@ -99,7 +99,7 @@ architecture:
       - {id: client, component: client, name: API client, x: 0, y: 0}
       - {id: limiter, component: rate-limiter, name: Rate limiter, instances: 4, x: 300, y: 0,
          extras: {algorithm: token-bucket}}
-      - {id: svc, component: service, name: API service, instances: 8, x: 620, y: 0}
+      - {id: svc, component: service, name: API service, instances: 8, x: 700, y: 0}
       - {id: counters, component: in-memory-store, name: Counters, technology: Redis, x: 300, y: 190}
     connections:
       - {from: client, to: limiter, mode: sync, protocol: HTTP, path: both}
