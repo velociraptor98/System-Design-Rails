@@ -1,17 +1,14 @@
 """Report every Citation URL that no longer resolves.
 
-Run from the repository root:  python scripts/check_links.py
+Run with the project's environment:  .venv/bin/python scripts/check_links.py
 Exits non-zero if any URL fails. A URL that answers 403 is reported as blocked,
 not broken: some hosts refuse scripted requests but open in a browser.
 """
 import sys
 import urllib.error
 import urllib.request
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from sysdesignhelper.content import load_library  # noqa: E402
+from sysdesignhelper.content import load_library
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (sysdesignhelper link check)"}
 

@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import QLineEdit
 
 from sysdesignhelper.app import apply_theme
 from sysdesignhelper.ui.main_window import AREAS, MainWindow
+from sysdesignhelper.ui.pages import PAGE_ID
 from sysdesignhelper.ui.session import STAGES
 
 
@@ -46,7 +47,7 @@ def test_question_filters(window):
 
 def test_session_has_six_stages_and_reveals(session):
     assert session.stack.count() == len(STAGES) == 6
-    for index, box in enumerate(session.attempts):
+    for box in session.attempts:
         assert box.revealed is None
         box.reveal()
         assert box.revealed is not None
@@ -126,7 +127,7 @@ def test_recall_drill_runs_across_selected_pages(window, library):
     pages.show_page("cache")
     for row in range(pages.listing.count()):
         item = pages.listing.item(row)
-        if item.data(0x0100) == "consistent-hashing":
+        if item.data(PAGE_ID) == "consistent-hashing":
             item.setSelected(True)
     expected = len(library.page("cache").recall) + len(library.page("consistent-hashing").recall)
     pages.start_drill()

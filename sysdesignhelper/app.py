@@ -18,15 +18,15 @@ def apply_theme(app: QApplication) -> None:
     app.styleHints().setColorScheme(Qt.ColorScheme.Dark)
     palette = QPalette()
     for role, color in (
-        (QPalette.ColorRole.Window, theme.BG),
-        (QPalette.ColorRole.Base, theme.SURFACE),
-        (QPalette.ColorRole.AlternateBase, theme.RAISED),
-        (QPalette.ColorRole.Button, theme.RAISED),
+        (QPalette.ColorRole.Window, theme.WIN),
+        (QPalette.ColorRole.Base, theme.CARD),
+        (QPalette.ColorRole.AlternateBase, theme.NODE),
+        (QPalette.ColorRole.Button, theme.NODE),
         (QPalette.ColorRole.WindowText, theme.TEXT),
         (QPalette.ColorRole.Text, theme.TEXT),
         (QPalette.ColorRole.ButtonText, theme.TEXT),
-        (QPalette.ColorRole.PlaceholderText, theme.MUTED),
-        (QPalette.ColorRole.ToolTipBase, theme.RAISED),
+        (QPalette.ColorRole.PlaceholderText, theme.TEXT2),
+        (QPalette.ColorRole.ToolTipBase, theme.NODE),
         (QPalette.ColorRole.ToolTipText, theme.TEXT),
         (QPalette.ColorRole.Highlight, theme.ACCENT),
         (QPalette.ColorRole.HighlightedText, "#ffffff"),
@@ -39,7 +39,7 @@ def apply_theme(app: QApplication) -> None:
 
 def main() -> int:
     app = QApplication(sys.argv)
-    app.setApplicationName("System Design Practice")
+    app.setApplicationName("System Design Rails")
     apply_theme(app)
     try:
         library = load_library()

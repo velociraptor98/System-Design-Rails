@@ -1,0 +1,48 @@
+{
+  "id": "service",
+  "name": "Service",
+  "sections": [
+    {
+      "heading": "What it is",
+      "claims": [
+        {
+          "text": "An HTTP server is a program that accepts connections in order to service HTTP requests by sending HTTP responses.",
+          "cite": ["rfc9110"]
+        }
+      ]
+    },
+    {
+      "heading": "Running several instances",
+      "claims": [
+        {
+          "text": "A load balancer distributes requests across several application servers, and can stop selecting an instance that has failed.",
+          "cite": ["nginx-lb"]
+        }
+      ]
+    },
+    {
+      "heading": "Keeping state out of it",
+      "claims": [
+        {
+          "text": "In Facebook's architecture a web server reads a value from the cache first, and on a miss retrieves it from the database or another backend service and populates the cache.",
+          "cite": ["memcache-fb"]
+        },
+        {
+          "text": "Facebook notes that separating the caching layer from the persistence layer lets each layer be adjusted independently as the workload changes.",
+          "cite": ["memcache-fb"]
+        }
+      ]
+    }
+  ],
+  "recall": [
+    {
+      "prompt": "In Facebook's architecture, what does a web server do on a cache miss?",
+      "answer": [
+        {
+          "text": "It retrieves the data from the database or other backend service and populates the cache with the key-value pair.",
+          "cite": ["memcache-fb"]
+        }
+      ]
+    }
+  ]
+}

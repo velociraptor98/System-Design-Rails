@@ -101,34 +101,29 @@ class BlockItem(QGraphicsItem):
 
         summary = block_summary(self.block)
         text_rect = body.adjusted(14, 10 if summary else 13, -14, -(9 if summary else 13))
-        font = QFont(painter.font())
-        font.setPixelSize(10)
-        font.setWeight(QFont.Weight.DemiBold)
-        font.setCapitalization(QFont.Capitalization.AllUppercase)
-        font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 0.6)
-        painter.setFont(font)
-        painter.setPen(QColor(theme.TEXT3))
-        kind = QFontMetricsF(font).elidedText(self.component_name, Qt.TextElideMode.ElideRight, text_rect.width())
-        painter.drawText(text_rect, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft, kind)
 
-        font = QFont(painter.font())
-        font.setCapitalization(QFont.Capitalization.MixedCase)
-        font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 0)
-        font.setPixelSize(14)
-        painter.setFont(font)
-        painter.setPen(QColor(theme.TEXT))
-        name = QFontMetricsF(font).elidedText(self.block.name or self.component_name,
-                                               Qt.TextElideMode.ElideRight, text_rect.width())
-        align = Qt.AlignmentFlag.AlignVCenter if summary else Qt.AlignmentFlag.AlignBottom
-        painter.drawText(text_rect, align | Qt.AlignmentFlag.AlignLeft, name)
-
-        if summary:
-            font.setWeight(QFont.Weight.Normal)
-            font.setPixelSize(11)
+        def draw(text: str, font: QFont, color: str, align: Qt.AlignmentFlag) -> None:
             painter.setFont(font)
-            painter.setPen(QColor(theme.TEXT2))
-            line = QFontMetricsF(font).elidedText(summary, Qt.TextElideMode.ElideRight, text_rect.width())
-            painter.drawText(text_rect, Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignLeft, line)
+            painter.setPen(QColor(color))
+            elided = QFontMetricsF(font).elidedText(text, Qt.TextElideMode.ElideRight, text_rect.width())
+            painter.drawText(text_rect, align | Qt.AlignmentFlag.AlignLeft, elided)
+
+        kind_font = QFont(painter.font())
+        kind_font.setPixelSize(10)
+        kind_font.setWeight(QFont.Weight.DemiBold)
+        kind_font.setCapitalization(QFont.Capitalization.AllUppercase)
+        kind_font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 0.6)
+        name_font = QFont(painter.font())
+        name_font.setPixelSize(14)
+        name_font.setWeight(QFont.Weight.DemiBold)
+        summary_font = QFont(painter.font())
+        summary_font.setPixelSize(11)
+
+        draw(self.component_name, kind_font, theme.TEXT3, Qt.AlignmentFlag.AlignTop)
+        draw(self.block.name or self.component_name, name_font, theme.TEXT,
+             Qt.AlignmentFlag.AlignVCenter if summary else Qt.AlignmentFlag.AlignBottom)
+        if summary:
+            draw(summary, summary_font, theme.TEXT2, Qt.AlignmentFlag.AlignBottom)
 
         if not self.read_only and (self.hovered or selected):
             painter.setPen(QPen(QColor(theme.NODE), 2.5))
@@ -259,7 +254,6 @@ class DesignScene(QGraphicsScene):
         super().__init__()
         self.library = library
         self.read_only = read_only
-        self.design = Design()
         self.block_items: dict[str, BlockItem] = {}
         self.connection_items: dict[str, ConnectionItem] = {}
         self._drag_source: BlockItem | None = None
@@ -312,7 +306,7 @@ class DesignScene(QGraphicsScene):
         for item in selected:
             if isinstance(item, BlockItem):
                 self.design.remove_block(item.block.id)
-        self._rebuild()
+        self.load(self.design)
 
     def clear_design(self) -> None:
         self.load(Design())
@@ -339,10 +333,6 @@ class DesignScene(QGraphicsScene):
         for connection_item in self.connection_items.values():
             if item in (connection_item.source, connection_item.target):
                 connection_item.update_path()
-
-    def _rebuild(self) -> None:
-        design = self.design
-        self.load(design)
 
     def _add_block_item(self, block: Block) -> BlockItem:
         item = BlockItem(block, self.component_name(block.component), self.read_only)
@@ -456,8 +446,8 @@ class CanvasView(QGraphicsView):
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor(theme.DOT))
         step = 20
-        left = int(math.floor(rect.left() / step)) * step
-        top = int(math.floor(rect.top() / step)) * step
+        left = math.floor(rect.left() / step) * step
+        top = math.floor(rect.top() / step) * step
         x = left
         while x < rect.right():
             y = top
@@ -529,8 +519,6 @@ class Palette(QListWidget):
 
 
 class Inspector(QWidget):
-    """Edits the properties of the selected Block or Connection in place."""
-
     edited = pyqtSignal(object)
     open_page = pyqtSignal(str)
     delete_requested = pyqtSignal()
@@ -546,12 +534,11 @@ class Inspector(QWidget):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(self.area)
-        self.body: QWidget | None = None
         self.show_target(None)
 
     def show_target(self, target: Block | Connection | None) -> None:
-        self.body = QWidget()
-        layout = QVBoxLayout(self.body)
+        body = QWidget()
+        layout = QVBoxLayout(body)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
         if isinstance(target, Block):
@@ -562,7 +549,7 @@ class Inspector(QWidget):
             self._heading(layout, "Properties", "Nothing selected")
             layout.addWidget(label("Select one block or connection to edit it.", "muted"))
         layout.addStretch(1)
-        self.area.setWidget(self.body)
+        self.area.setWidget(body)
 
     @staticmethod
     def _heading(layout: QVBoxLayout, title: str, subtitle: str) -> None:

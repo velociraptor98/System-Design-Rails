@@ -61,9 +61,8 @@ def source_text(url: str) -> str:
     return f"{host} — {tail}" if tail else host
 
 
-def link_html(url: str, text: str | None = None) -> str:
-    shown = escape(text if text is not None else url)
-    return f'<a style="color:{theme.LINK}; text-decoration:none" href="{escape(url, quote=True)}">{shown}</a>'
+def link_html(url: str, text: str) -> str:
+    return f'<a style="color:{theme.LINK}; text-decoration:none" href="{escape(url, quote=True)}">{escape(text)}</a>'
 
 
 def link_label(html: str, name: str = "citation") -> QLabel:
@@ -83,9 +82,9 @@ def scrollable(inner: QWidget) -> QScrollArea:
     return area
 
 
-def card(name: str = "card") -> tuple[QFrame, QVBoxLayout]:
+def card() -> tuple[QFrame, QVBoxLayout]:
     frame = QFrame()
-    frame.setObjectName(name)
+    frame.setObjectName("card")
     layout = QVBoxLayout(frame)
     layout.setContentsMargins(20, 16, 20, 18)
     layout.setSpacing(10)
@@ -108,8 +107,6 @@ def discard(widget: QWidget) -> None:
 
 
 class Toolbar(QWidget):
-    """The strip at the top of each area: optional back button, title, then actions on the right."""
-
     back = pyqtSignal()
 
     def __init__(self, title: str, subtitle: str = "", with_back: bool = False):
@@ -159,9 +156,6 @@ class SegmentButton(QPushButton):
         self.setFixedHeight(30)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setAccessibleName(text)
-
-    def text(self) -> str:
-        return self.caption
 
     def sizeHint(self) -> QSize:
         return QSize(self.fontMetrics().horizontalAdvance(self.number + self.caption) + 40, 30)
@@ -233,8 +227,6 @@ class SegmentedControl(QFrame):
 
 
 class Tabs(QWidget):
-    """A segmented control switching between a few panels."""
-
     def __init__(self, tabs):
         super().__init__()
         layout = QVBoxLayout(self)
@@ -260,15 +252,19 @@ class Tabs(QWidget):
         self.stack.setCurrentIndex(index)
 
 
+def tick_box() -> QCheckBox:
+    box = QCheckBox()
+    box.setToolTip("Tick if your answer covered this")
+    return box
+
+
 def tick_row(text: str) -> QWidget:
     """A tick box with a label that wraps, which QCheckBox's own text cannot do."""
     host = QWidget()
     row = QHBoxLayout(host)
     row.setContentsMargins(0, 0, 0, 0)
     row.setSpacing(10)
-    box = QCheckBox()
-    box.setToolTip("Tick if your answer covered this")
-    row.addWidget(box, 0, Qt.AlignmentFlag.AlignTop)
+    row.addWidget(tick_box(), 0, Qt.AlignmentFlag.AlignTop)
     row.addWidget(label(text, "body"), 1)
     return host
 
@@ -313,8 +309,6 @@ class Stepper(QWidget):
 
 
 class EditorCard(QFrame):
-    """A text area inside a rounded card whose border lights up while it has focus."""
-
     def __init__(self, placeholder: str):
         super().__init__()
         self.setObjectName("editorCard")
@@ -334,19 +328,13 @@ class EditorCard(QFrame):
 
 
 class ClaimView(QWidget):
-    """One claim with its Citations, optionally preceded by a tick box."""
-
     def __init__(self, claim: Claim, tickable: bool = False):
         super().__init__()
-        self.claim = claim
         row = QHBoxLayout(self)
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(10)
-        self.tick: QCheckBox | None = None
         if tickable:
-            self.tick = QCheckBox()
-            self.tick.setToolTip("Tick if your answer covered this")
-            row.addWidget(self.tick, 0, Qt.AlignmentFlag.AlignTop)
+            row.addWidget(tick_box(), 0, Qt.AlignmentFlag.AlignTop)
         column = QVBoxLayout()
         column.setSpacing(5)
         column.addWidget(label(claim.text, "synthesisText" if claim.synthesis else "body"))
@@ -369,37 +357,27 @@ class ClaimView(QWidget):
         row.addLayout(column, 1)
 
 
-def add_claims(layout: QVBoxLayout, claims, tickable: bool = False) -> list[ClaimView]:
-    views = []
+def add_claims(layout: QVBoxLayout, claims, tickable: bool = False) -> None:
     for index, claim in enumerate(claims):
         if index:
             layout.addWidget(rule())
-        view = ClaimView(claim, tickable=tickable)
-        views.append(view)
-        layout.addWidget(view)
-    return views
+        layout.addWidget(ClaimView(claim, tickable=tickable))
 
 
-class AnswerPanel(QFrame):
-    """A Reference answer for one Stage: its kind, then its Key points."""
-
-    def __init__(self, answer: StageAnswer, tickable: bool = True, heading: str = "Key points"):
-        super().__init__()
-        self.setObjectName("card")
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 16, 20, 18)
-        layout.setSpacing(10)
-        layout.addWidget(label(heading, "h2"))
-        if answer.kind == REAL_SYSTEM:
-            layout.addWidget(label(
-                f"Real-system answer: {answer.system}. Every sentence reports what its source published.",
-                "realSystem",
-            ))
-        else:
-            layout.addWidget(label(
-                "Synthesized answer. No published real system fits this Stage, so this answer was composed "
-                "for the Question. Sentences with a link are backed by that source. Sentences in italics are "
-                "judgement with no source behind them; treat them as one reasonable answer, not the answer.",
-                "disclaimer",
-            ))
-        self.claims = add_claims(layout, answer.key_points, tickable=tickable)
+def answer_panel(answer: StageAnswer, tickable: bool = True, heading: str = "Key points") -> QFrame:
+    frame, layout = card()
+    layout.addWidget(label(heading, "h2"))
+    if answer.kind == REAL_SYSTEM:
+        layout.addWidget(label(
+            f"Real-system answer: {answer.system}. Every sentence reports what its source published.",
+            "realSystem",
+        ))
+    else:
+        layout.addWidget(label(
+            "Synthesized answer. No published real system fits this Stage, so this answer was composed "
+            "for the Question. Sentences with a link are backed by that source. Sentences in italics are "
+            "judgement with no source behind them; treat them as one reasonable answer, not the answer.",
+            "disclaimer",
+        ))
+    add_claims(layout, answer.key_points, tickable=tickable)
+    return frame

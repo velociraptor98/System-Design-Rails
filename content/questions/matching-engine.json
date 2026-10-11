@@ -1,0 +1,412 @@
+{
+  "id": "matching-engine",
+  "title": "Design an exchange matching engine",
+  "category": "trading",
+  "prompt": "Design the core of an exchange for one market. Participants submit and cancel limit orders; the exchange matches them, acknowledges every order to its sender, and publishes market data to everyone.",
+  "scope": {
+    "functional": [
+      "Accept new limit orders and cancellations from participants.",
+      "Match orders in price-time priority.",
+      "Tell each participant what happened to its own orders, including accepted, executed, cancelled and rejected.",
+      "Publish every change to the order book to all subscribers."
+    ],
+    "non_functional": [
+      "The same sequence of inputs always produces the same outputs.",
+      "No acknowledged order is lost when one machine fails.",
+      "Orders are processed in the order they arrive.",
+      "Round-trip time from order submission to acknowledgement is well under a millisecond."
+    ],
+    "assumptions": [
+      "Peak of 300,000 orders and cancellations per second.",
+      "An input message is about 64 bytes.",
+      "The trading day lasts 6.5 hours."
+    ],
+    "estimates": [
+      {
+        "label": "Processing budget per message on one thread",
+        "working": "1 s / 300,000",
+        "result": "about 3.3 microseconds"
+      },
+      {
+        "label": "Input log growth at peak",
+        "working": "300,000 x 64 bytes",
+        "result": "19.2 MB per second"
+      },
+      {
+        "label": "Input log for a day, if the peak were sustained",
+        "working": "19.2 MB x (6.5 x 3,600 s) = 19.2 MB x 23,400",
+        "result": "about 450 GB, an upper bound"
+      }
+    ]
+  },
+  "api": {
+    "kind": "real-system",
+    "system": "Nasdaq OUCH 5.0 and TotalView-ITCH 5.0",
+    "key_points": [
+      {
+        "text": "OUCH lets participants enter, replace and cancel orders and receive executions. Every message type has a fixed length.",
+        "cite": ["ouch"]
+      },
+      {
+        "text": "Each order is identified for the day by the participant's account and a participant-created UserRefNum, which must be unique and strictly increasing.",
+        "cite": ["ouch"]
+      },
+      {
+        "text": "Client-to-host messages are not guaranteed, so they are designed to be benignly resent; the system ignores a request whose UserRefNum is lower than the last one processed.",
+        "cite": ["ouch"]
+      },
+      {
+        "text": "Host-to-client messages are sequenced with delivery guaranteed by a lower-level protocol. Order Accepted acknowledges a valid order, Order Executed reports all or part of an order executed, Order Canceled reports a reduction or cancellation, and Rejected gives a reason.",
+        "cite": ["ouch"]
+      },
+      {
+        "text": "A cancel request states the new intended order size, the maximum number of shares that can be executed in total after the cancel is applied.",
+        "cite": ["ouch"]
+      },
+      {
+        "text": "Market data is a separate, outbound-only feed. ITCH publishes order-level data as a series of messages that track the life of each order.",
+        "cite": ["itch"]
+      }
+    ]
+  },
+  "data_model": {
+    "kind": "real-system",
+    "system": "Nasdaq, CME Globex and Coinbase Derivatives Exchange",
+    "key_points": [
+      {
+        "text": "Nasdaq's limit order book is a database of available limit orders waiting to be matched in price-time priority.",
+        "cite": ["ouch"]
+      },
+      {
+        "text": "On CME Globex's FIFO step, resting orders are matched in the timestamp order in which they were received, and an order loses that priority if its quantity is increased or its price or account changes.",
+        "cite": ["cme-matching"]
+      },
+      {
+        "text": "Each order on Nasdaq's book has a day-unique Order Reference Number, and every later message about the order carries it.",
+        "cite": ["itch"]
+      },
+      {
+        "text": "Coinbase's order message carries an order ID and a price as 64-bit integers, a quantity as a 32-bit integer, a side as an 8-bit enum and a 32-character client order ID, ordered by field size.",
+        "cite": ["coinbase-exchange"]
+      },
+      {
+        "text": "Coinbase favours memory-local, primitive-friendly data structures for the book, noting that cache locality outweighs O(n).",
+        "cite": ["coinbase-exchange"]
+      }
+    ]
+  },
+  "architecture": {
+    "kind": "real-system",
+    "system": "Coinbase Derivatives Exchange",
+    "notes": [
+      {
+        "text": "The hot path is: the order gateway parses and validates the order, sends it to the trading system, Raft consensus runs, the matching algorithm runs, order events go back to the gateway, and the gateway translates the acknowledgement.",
+        "cite": ["coinbase-exchange"]
+      },
+      {
+        "text": "The trading system runs as a Raft leader with followers using Aeron Cluster, and is deterministic and single threaded.",
+        "cite": ["coinbase-exchange"]
+      },
+      {
+        "text": "Its output is multicast to the order and market data gateways; everything else is served by replicating the input log and fanning out from replays.",
+        "cite": ["coinbase-exchange"]
+      },
+      {
+        "text": "The Raft log is persisted to disk and replicated to a cluster backup through Aeron Archive.",
+        "cite": ["coinbase-exchange"]
+      },
+      {
+        "text": "Coinbase reports about 1 microsecond of trading system processing, 300k per second peak throughput, and 4 network hops on the round trip.",
+        "cite": ["coinbase-exchange"]
+      }
+    ],
+    "design": {
+      "blocks": [
+        {"id": "firm", "component": "client", "name": "Trading firm", "x": 0, "y": 170},
+        {"id": "gw", "component": "order-gateway", "name": "Order gateway", "x": 330, "y": 0},
+        {
+          "id": "engine",
+          "component": "matching-engine",
+          "name": "Trading system",
+          "technology": "Aeron Cluster",
+          "replication_factor": 3,
+          "x": 700,
+          "y": 170,
+          "extras": {"threading": "single-threaded"},
+          "note": "Raft leader and followers. The source does not state how many followers."
+        },
+        {
+          "id": "md",
+          "component": "market-data-publisher",
+          "name": "Market data gateway",
+          "x": 330,
+          "y": 340
+        },
+        {
+          "id": "log",
+          "component": "event-log",
+          "name": "Cluster backup",
+          "technology": "Aeron Archive",
+          "x": 1090,
+          "y": 170
+        }
+      ],
+      "connections": [
+        {
+          "from": "firm",
+          "to": "gw",
+          "mode": "sync",
+          "protocol": "FIX",
+          "path": "write",
+          "label": "order submit"
+        },
+        {
+          "from": "gw",
+          "to": "engine",
+          "mode": "async",
+          "protocol": "UDP",
+          "path": "write",
+          "label": "order request"
+        },
+        {
+          "from": "engine",
+          "to": "gw",
+          "mode": "async",
+          "protocol": "UDP multicast",
+          "path": "both",
+          "label": "order events"
+        },
+        {
+          "from": "engine",
+          "to": "md",
+          "mode": "async",
+          "protocol": "UDP multicast",
+          "path": "read",
+          "label": "order events"
+        },
+        {
+          "from": "md",
+          "to": "firm",
+          "mode": "async",
+          "protocol": "WebSocket",
+          "path": "read",
+          "label": "market data"
+        },
+        {
+          "from": "engine",
+          "to": "log",
+          "mode": "async",
+          "protocol": "UDP",
+          "path": "write",
+          "label": "Raft log"
+        }
+      ]
+    },
+    "checks": [
+      {
+        "id": "engine-single-threaded",
+        "title": "The Matching engine is single threaded",
+        "miss": "There is no Matching engine, or its threading is not set to single-threaded.",
+        "rule": {
+          "each_block": {
+            "where": {"component": "matching-engine"},
+            "require": {"extras.threading": "single-threaded"}
+          }
+        },
+        "rationale": {
+          "text": "Coinbase's trading system is single threaded, and Raft with Aeron Cluster requires the application to be deterministic and single threaded.",
+          "cite": ["coinbase-exchange"]
+        }
+      },
+      {
+        "id": "engine-replicated",
+        "title": "The Matching engine is replicated",
+        "miss": "There is no Matching engine, or its replication factor is 1.",
+        "rule": {
+          "each_block": {
+            "where": {"component": "matching-engine"},
+            "require": {"replication_factor": {"gte": 2}}
+          }
+        },
+        "rationale": {
+          "text": "Coinbase gets fault tolerance by running the trading system as a Raft leader with followers; Raft stays fully functional as long as a majority of servers are operational.",
+          "cite": ["coinbase-exchange", "raft"]
+        }
+      },
+      {
+        "id": "gateway-in-front",
+        "title": "Clients reach the Matching engine only through an Order gateway",
+        "miss": "A Client connects straight to the Matching engine, or no Order gateway feeds it.",
+        "rule": {
+          "all_of": [
+            {
+              "no_connection": {
+                "from": {"component": "client"},
+                "to": {"component": "matching-engine"}
+              }
+            },
+            {
+              "has_connection": {
+                "from": {"component": "order-gateway"},
+                "to": {"component": "matching-engine"}
+              }
+            }
+          ]
+        },
+        "rationale": {
+          "text": "On Coinbase's hot path the order gateway parses and validates an order before sending the request to the trading system.",
+          "cite": ["coinbase-exchange"]
+        }
+      },
+      {
+        "id": "output-multicast",
+        "title": "The Matching engine's output is multicast",
+        "miss": "No Connection out of the Matching engine uses UDP multicast.",
+        "rule": {
+          "has_connection": {
+            "from": {"component": "matching-engine"},
+            "to": {"component": ["market-data-publisher", "order-gateway"]},
+            "where": {"protocol": "UDP multicast"}
+          }
+        },
+        "rationale": {
+          "text": "Coinbase multicasts the trading system's output to its order and market data gateways; with multicast each packet is transmitted once regardless of the number of listeners.",
+          "cite": ["coinbase-exchange", "moldudp64"]
+        }
+      },
+      {
+        "id": "market-data-path",
+        "title": "Market data reaches Clients through a Market data publisher",
+        "miss": "No path leads from the Matching engine through a Market data publisher to a Client.",
+        "rule": {
+          "has_path": {
+            "from": {"component": "matching-engine"},
+            "via": {"component": "market-data-publisher"},
+            "to": {"component": "client"}
+          }
+        },
+        "rationale": {
+          "text": "Order entry reports only on a participant's own orders; information about all orders on the book is published on a separate, outbound-only market data feed.",
+          "cite": ["ouch", "itch"]
+        }
+      },
+      {
+        "id": "input-log-replicated",
+        "title": "The input log is replicated off the Matching engine",
+        "miss": "No Connection leads from the Matching engine to an Event log.",
+        "rule": {
+          "has_connection": {
+            "from": {"component": "matching-engine"},
+            "to": {"component": "event-log"}
+          }
+        },
+        "rationale": {
+          "text": "Coinbase persists the Raft log, the trading system's input, and replicates it to a cluster backup; it replicates input, not output, because output is larger and unbounded.",
+          "cite": ["coinbase-exchange"]
+        }
+      }
+    ]
+  },
+  "deep_dives": [
+    {
+      "prompt": "The machine running the matching engine dies mid-session. How does the exchange carry on without losing or reordering an order?",
+      "kind": "real-system",
+      "system": "Coinbase Derivatives Exchange, with Raft",
+      "pages": ["replicated-state-machine", "event-log"],
+      "key_points": [
+        {
+          "text": "The trading system is a deterministic state machine, so it can be snapshotted, restored and replayed to reach its live state.",
+          "cite": ["coinbase-exchange"]
+        },
+        {
+          "text": "It runs under Raft: the leader accepts log entries, replicates them on other servers, and tells servers when it is safe to apply them.",
+          "cite": ["raft", "coinbase-exchange"]
+        },
+        {
+          "text": "An entry is committed once the leader has replicated it on a majority of servers, and committed entries are durable and eventually executed by all available state machines.",
+          "cite": ["raft"]
+        },
+        {
+          "text": "If a log entry is committed in a given term, it is present in the logs of the leaders of all higher-numbered terms, so a new leader has every committed order.",
+          "cite": ["raft"]
+        },
+        {
+          "text": "Determinism is the hard part: Coinbase lists data structure iteration order, randomness and behaviour changes between versions as hazards.",
+          "cite": ["coinbase-exchange"]
+        }
+      ]
+    },
+    {
+      "prompt": "Why is the matching engine single threaded, and how does one thread keep up with 300,000 messages per second?",
+      "kind": "real-system",
+      "system": "Coinbase Derivatives Exchange and LMAX",
+      "pages": ["single-writer-ring-buffer", "matching-engine"],
+      "key_points": [
+        {
+          "text": "Raft with Aeron Cluster requires the application to be deterministic and single threaded, and system throughput is then one over the application's processing time.",
+          "cite": ["coinbase-exchange"]
+        },
+        {
+          "text": "Coinbase reports trading system processing times of about 1 microsecond and a peak throughput of 300k per second.",
+          "cite": ["coinbase-exchange"]
+        },
+        {
+          "text": "LMAX measured a counter increment at 300 ms for 500 million iterations on one unlocked thread, against 10,000 ms with a lock and 224,000 ms with two threads sharing the lock.",
+          "cite": ["disruptor"]
+        },
+        {
+          "text": "Coinbase keeps the thread fast with no allocation on the hot path, memory-local and primitive-friendly data structures, and hot threads pinned to fixed CPUs.",
+          "cite": ["coinbase-exchange"]
+        }
+      ]
+    },
+    {
+      "prompt": "A market data subscriber misses a packet. How does it find out, and how does it catch up?",
+      "kind": "real-system",
+      "system": "Nasdaq MoldUDP64 and TotalView-ITCH",
+      "pages": ["sequenced-multicast", "market-data-publisher"],
+      "key_points": [
+        {
+          "text": "Each packet header carries the sequence number of its first message and a message count, so a listener can detect a gap.",
+          "cite": ["moldudp64"]
+        },
+        {
+          "text": "Heartbeats carrying the next expected sequence number, typically once per second, let receivers sense loss even when traffic is low.",
+          "cite": ["moldudp64"]
+        },
+        {
+          "text": "On detecting a gap the receiver sends a Request Packet to a re-request server, which replies with the missing messages by UDP unicast.",
+          "cite": ["moldudp64"]
+        },
+        {
+          "text": "The gap matters because the feed is cumulative: a subscriber derives an order's displayed shares by applying every modify message to the original Add Order.",
+          "cite": ["itch"]
+        }
+      ]
+    },
+    {
+      "prompt": "A participant's connection drops just after it sends an order. How do you let it retry without creating a duplicate order?",
+      "kind": "real-system",
+      "system": "Nasdaq OUCH 5.0",
+      "pages": ["order-gateway"],
+      "key_points": [
+        {
+          "text": "OUCH treats client-to-host messages as non-guaranteed and designs every one so it can be benignly resent.",
+          "cite": ["ouch"]
+        },
+        {
+          "text": "The UserRefNum must be unique and strictly increasing through the day, and the system ignores requests with a UserRefNum lower than the last one processed as retransmissions.",
+          "cite": ["ouch"]
+        },
+        {
+          "text": "One account can be bound to multiple OUCH machines that mirror each other, so pending messages can be resent over a mirrored link.",
+          "cite": ["ouch"]
+        },
+        {
+          "text": "Outbound messages are sequenced with guaranteed delivery, so the participant learns the order's fate from the Accepted or Rejected message.",
+          "cite": ["ouch"]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,322 @@
+{
+  "id": "log-pipeline",
+  "title": "Design a log collection pipeline with expiry",
+  "category": "general",
+  "prompt": "Design a system that collects log events from many services, makes them available to real-time and offline consumers, and deletes them automatically after 12 hours.",
+  "company_tags": [
+    {
+      "company": "Goldman Sachs",
+      "reports": [
+        "https://leetcode.com/discuss/interview-question/1426465/goldman-sachs-superday-experience"
+      ]
+    },
+    {
+      "company": "Google",
+      "reports": [
+        "https://leetcode.com/discuss/interview-experience/692902/google-l5-mountain-view-june-2020-reject-interview-myths/"
+      ]
+    }
+  ],
+  "scope": {
+    "functional": [
+      "Services publish log events.",
+      "Real-time consumers read events within seconds of publication.",
+      "Offline consumers load events in bulk.",
+      "Events are deleted automatically 12 hours after they are published.",
+      "A consumer can go back and re-read events it has already read."
+    ],
+    "non_functional": [
+      "Publishing does not slow the services down.",
+      "A slow consumer does not hold back the others.",
+      "No event is lost between the log and a consumer."
+    ],
+    "assumptions": [
+      "1 billion events per day.",
+      "An event averages 200 bytes.",
+      "Events are kept for 12 hours.",
+      "The log is stored in files of 1 GB."
+    ],
+    "estimates": [
+      {
+        "label": "Events per second, on average",
+        "working": "1,000,000,000 / 86,400",
+        "result": "about 11,600 per second"
+      },
+      {"label": "Data per day", "working": "1,000,000,000 x 200 bytes", "result": "200 GB"},
+      {
+        "label": "Data held at any moment",
+        "working": "200 GB x (12 / 24)",
+        "result": "100 GB before replication"
+      },
+      {
+        "label": "Files held at any moment",
+        "working": "100 GB / 1 GB",
+        "result": "about 100 files"
+      }
+    ]
+  },
+  "api": {
+    "kind": "real-system",
+    "system": "Kafka at LinkedIn",
+    "key_points": [
+      {
+        "text": "Frontend services publish log data to the Kafka brokers in batches.",
+        "cite": ["kafka-paper"]
+      },
+      {
+        "text": "Consumers pull: each retrieves messages at the maximum rate it can sustain, and is not flooded by messages pushed faster than it can handle.",
+        "cite": ["kafka-paper"]
+      },
+      {
+        "text": "A consumer reads a partition sequentially, and acknowledging an offset implies it has received every message before that offset.",
+        "cite": ["kafka-paper"]
+      },
+      {
+        "text": "Consumers are organised into consumer groups: each message goes to only one consumer in a group, and different groups each consume the full set independently.",
+        "cite": ["kafka-paper"]
+      }
+    ]
+  },
+  "data_model": {
+    "kind": "real-system",
+    "system": "Kafka at LinkedIn",
+    "key_points": [
+      {
+        "text": "Each partition of a topic is a logical log, stored as a set of segment files of about the same size, for example 1 GB.",
+        "cite": ["kafka-paper"]
+      },
+      {
+        "text": "A published message is appended to the last segment file of its partition.",
+        "cite": ["kafka-paper"]
+      },
+      {
+        "text": "Segment files are flushed after a configurable number of messages or amount of time, and a message is exposed to consumers only after it is flushed.",
+        "cite": ["kafka-paper"]
+      },
+      {
+        "text": "How much each consumer has consumed is kept by the consumer, not by the broker.",
+        "cite": ["kafka-paper"]
+      }
+    ]
+  },
+  "architecture": {
+    "kind": "real-system",
+    "system": "Kafka at LinkedIn",
+    "notes": [
+      {
+        "text": "LinkedIn runs one Kafka cluster co-located with each data centre where its user-facing services run. Frontend services publish their log data to the local brokers in batches.",
+        "cite": ["kafka-paper"]
+      },
+      {
+        "text": "A hardware load balancer distributes the publish requests evenly across the brokers.",
+        "cite": ["kafka-paper"]
+      },
+      {
+        "text": "Online consumers run in services within the same data centre, and MapReduce jobs read directly from Kafka to load the data into Hadoop.",
+        "cite": ["kafka-paper"]
+      },
+      {
+        "text": "A message is deleted automatically once it has been retained longer than a set period, typically 7 days at LinkedIn; this Question's Scope sets 12 hours.",
+        "cite": ["kafka-paper"]
+      },
+      {
+        "text": "LinkedIn reports an end-to-end latency for the complete pipeline of about 10 seconds on average.",
+        "cite": ["kafka-paper"]
+      }
+    ],
+    "design": {
+      "blocks": [
+        {
+          "id": "fe",
+          "component": "service",
+          "name": "Frontend services",
+          "instances": 50,
+          "x": 0,
+          "y": 130,
+          "note": "Instance counts are placeholders; the paper gives none."
+        },
+        {"id": "lb", "component": "load-balancer", "name": "Load balancer", "x": 460, "y": 130},
+        {
+          "id": "log",
+          "component": "event-log",
+          "name": "Kafka brokers",
+          "technology": "Kafka",
+          "instances": 3,
+          "x": 840,
+          "y": 130,
+          "extras": {"retention": "time-based"}
+        },
+        {
+          "id": "rt",
+          "component": "service",
+          "name": "Real-time services",
+          "instances": 4,
+          "x": 1220,
+          "y": 0
+        },
+        {
+          "id": "hadoop",
+          "component": "database",
+          "name": "Offline store",
+          "technology": "Hadoop",
+          "x": 1220,
+          "y": 260
+        }
+      ],
+      "connections": [
+        {
+          "from": "fe",
+          "to": "lb",
+          "mode": "async",
+          "protocol": "TCP",
+          "path": "write",
+          "label": "publish in batches"
+        },
+        {"from": "lb", "to": "log", "mode": "async", "protocol": "TCP", "path": "write"},
+        {
+          "from": "log",
+          "to": "rt",
+          "mode": "async",
+          "protocol": "TCP",
+          "path": "read",
+          "label": "pulled by consumer"
+        },
+        {
+          "from": "log",
+          "to": "hadoop",
+          "mode": "async",
+          "protocol": "TCP",
+          "path": "read",
+          "label": "pulled by MapReduce load"
+        }
+      ]
+    },
+    "checks": [
+      {
+        "id": "retention-by-age",
+        "title": "The Event log deletes events by age",
+        "miss": "There is no Event log, or its retention is not set to time-based.",
+        "rule": {
+          "each_block": {
+            "where": {"component": "event-log"},
+            "require": {"extras.retention": "time-based"}
+          }
+        },
+        "rationale": {
+          "text": "Kafka's broker does not know what each consumer has read, so it uses a time-based retention policy: a message is deleted once retained longer than a set period.",
+          "cite": ["kafka-paper"]
+        }
+      },
+      {
+        "id": "publish-to-log",
+        "title": "Services publish to the Event log",
+        "miss": "No path leads from a Service to an Event log.",
+        "rule": {"has_path": {"from": {"component": "service"}, "to": {"component": "event-log"}}},
+        "rationale": {
+          "text": "LinkedIn's frontend services publish their log data to the local Kafka brokers in batches.",
+          "cite": ["kafka-paper"]
+        }
+      },
+      {
+        "id": "consumers-read-log",
+        "title": "Consumers read from the Event log",
+        "miss": "Nothing reads from the Event log. Draw the Connection in either direction, with the read path if it starts at the consumer.",
+        "rule": {
+          "any_of": [
+            {
+              "has_connection": {
+                "from": {"component": "event-log"},
+                "to": {"component": ["service", "database"]}
+              }
+            },
+            {
+              "has_connection": {
+                "from": {"component": ["service", "database"]},
+                "to": {"component": "event-log"},
+                "where": {"path": "read"}
+              }
+            }
+          ]
+        },
+        "rationale": {
+          "text": "Kafka consumers pull from the brokers, each at the maximum rate it can sustain, and different consumer groups read the full set of messages independently.",
+          "cite": ["kafka-paper"]
+        }
+      }
+    ]
+  },
+  "deep_dives": [
+    {
+      "prompt": "Events must disappear after 12 hours. How does the log delete them without tracking which consumers have read what?",
+      "kind": "real-system",
+      "system": "Kafka at LinkedIn",
+      "pages": ["log-retention"],
+      "key_points": [
+        {
+          "text": "The broker does not maintain how much each consumer has consumed, so it cannot know whether all subscribers have read a message.",
+          "cite": ["kafka-paper"]
+        },
+        {
+          "text": "It uses a time-based retention policy: a message is automatically deleted once it has been retained longer than a set period.",
+          "cite": ["kafka-paper"]
+        },
+        {
+          "text": "The log is a set of segment files of about the same size, appended to at the end.",
+          "cite": ["kafka-paper"]
+        },
+        {
+          "text": "Retaining data for a long period is feasible because Kafka's performance does not degrade with a larger data size.",
+          "cite": ["kafka-paper"]
+        }
+      ]
+    },
+    {
+      "prompt": "A consumer crashes and restarts. What does it read again, and what delivery guarantee does that give?",
+      "kind": "real-system",
+      "system": "Kafka at LinkedIn",
+      "pages": ["consumer-offsets"],
+      "key_points": [
+        {
+          "text": "Acknowledging an offset means every message before it in the partition has been received, and the consumer, not the broker, keeps that position.",
+          "cite": ["kafka-paper"]
+        },
+        {
+          "text": "Kafka in general guarantees only at-least-once delivery; when a consumer process crashes without a clean shutdown, messages can be delivered again.",
+          "cite": ["kafka-paper"]
+        },
+        {
+          "text": "Because consumption is pull-based, a consumer is easy to rewind to an earlier point.",
+          "cite": ["kafka-paper"]
+        },
+        {
+          "text": "For the Hadoop load, the stateless broker and client-side storage of offsets let a restarted task reload data without duplicating or losing messages.",
+          "cite": ["kafka-paper"]
+        }
+      ]
+    },
+    {
+      "prompt": "How would you prove that no events are being lost between the services and the consumers?",
+      "kind": "real-system",
+      "system": "Kafka at LinkedIn",
+      "pages": ["event-log"],
+      "key_points": [
+        {
+          "text": "LinkedIn's tracking includes an auditing system to verify that there is no data loss along the whole pipeline.",
+          "cite": ["kafka-paper"]
+        },
+        {
+          "text": "Each message carries the timestamp and the server name from when it was generated.",
+          "cite": ["kafka-paper"]
+        },
+        {
+          "text": "Each producer periodically publishes a monitoring event recording how many messages it published per topic within a fixed time window, to a separate topic.",
+          "cite": ["kafka-paper"]
+        },
+        {
+          "text": "Consumers count the messages they received from a topic and validate the counts against the monitoring events.",
+          "cite": ["kafka-paper"]
+        }
+      ]
+    }
+  ]
+}

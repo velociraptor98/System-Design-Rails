@@ -1,9 +1,8 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
-
-import yaml
 
 from .design import Design
 
@@ -152,12 +151,12 @@ class _Loader:
         self.where = ""
 
     def load(self) -> Library:
-        self.where = "sources.yaml"
-        for key, raw in self._read(self.dir / "sources.yaml").items():
-            self.library.sources[key] = Citation(url=raw["url"], retrieved=bool(raw["retrieved"]))
+        self.where = "sources.json"
+        for key, raw in self._read(self.dir / "sources.json").items():
+            self.library.sources[key] = Citation(url=raw["url"], retrieved=raw["retrieved"])
 
         for kind, target in (("mechanism", self.library.mechanisms), ("component", self.library.components)):
-            for path in sorted((self.dir / f"{kind}s").glob("*.yaml")):
+            for path in sorted((self.dir / f"{kind}s").glob("*.json")):
                 self.where = f"{kind}s/{path.name}"
                 page = self._page(self._read(path), kind)
                 target[page.id] = page
@@ -165,24 +164,26 @@ class _Loader:
         for page in self.library.components.values():
             for mechanism in page.mechanisms:
                 if mechanism not in self.library.mechanisms:
-                    raise ContentError(f"components/{page.id}.yaml: unknown mechanism {mechanism!r}")
+                    raise ContentError(f"components/{page.id}.json: unknown mechanism {mechanism!r}")
 
-        for path in sorted((self.dir / "questions").glob("*.yaml")):
+        for path in sorted((self.dir / "questions").glob("*.json")):
             self.where = f"questions/{path.name}"
             question = self._question(self._read(path))
             self.library.questions[question.id] = question
         return self.library
 
     def _read(self, path: Path) -> dict:
-        with path.open(encoding="utf-8") as handle:
-            return yaml.safe_load(handle) or {}
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as error:
+            raise ContentError(f"{self.where}: {error}") from error
 
     def _fail(self, message: str):
         raise ContentError(f"{self.where}: {message}")
 
     def _claim(self, raw: dict, allow_synthesis: bool = False) -> Claim:
-        text = " ".join(str(raw["text"]).split())
-        synthesis = bool(raw.get("synthesis", False))
+        text = raw["text"]
+        synthesis = raw.get("synthesis", False)
         keys = raw.get("cite", [])
         if synthesis:
             if not allow_synthesis:
@@ -200,7 +201,7 @@ class _Loader:
         return Claim(text=text, citations=tuple(citations))
 
     def _claims(self, raw_list, allow_synthesis: bool = False) -> tuple[Claim, ...]:
-        claims = tuple(self._claim(raw, allow_synthesis) for raw in raw_list or [])
+        claims = tuple(self._claim(raw, allow_synthesis) for raw in raw_list)
         if not claims:
             self._fail("expected at least one claim")
         return claims
@@ -261,7 +262,7 @@ class _Loader:
             id=raw["id"],
             title=raw["title"],
             category=raw["category"],
-            prompt=" ".join(raw["prompt"].split()),
+            prompt=raw["prompt"],
             company_tags=tuple(
                 CompanyTag(company=t["company"], reports=tuple(t["reports"]))
                 for t in raw.get("company_tags", [])

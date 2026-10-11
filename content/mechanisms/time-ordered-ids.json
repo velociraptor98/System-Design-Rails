@@ -1,0 +1,71 @@
+{
+  "id": "time-ordered-ids",
+  "name": "Time-ordered unique IDs",
+  "sections": [
+    {
+      "heading": "Requirements Twitter set for Snowflake",
+      "claims": [
+        {
+          "text": "Machines generating IDs should not have to coordinate with each other, for high availability within and across data centres.",
+          "cite": ["snowflake"]
+        },
+        {
+          "text": "IDs had to stay under 64 bits and be sortable without loading the full objects they represent. The guarantee on ordering is that IDs are k-sorted, that is, roughly time ordered.",
+          "cite": ["snowflake"]
+        },
+        {
+          "text": "The performance target was a minimum of 10k IDs per second per process.",
+          "cite": ["snowflake"]
+        }
+      ]
+    },
+    {
+      "heading": "How an ID is composed",
+      "claims": [
+        {
+          "text": "41 bits of time at millisecond precision, which with a custom epoch lasts 69 years; 10 bits of configured machine ID, allowing up to 1024 machines; and 12 bits of sequence number, which rolls over every 4096 per machine.",
+          "cite": ["snowflake"]
+        },
+        {
+          "text": "The generator has protection to avoid the sequence rolling over within the same millisecond.",
+          "cite": ["snowflake"]
+        }
+      ]
+    },
+    {
+      "heading": "Clock dependency",
+      "claims": [
+        {
+          "text": "The system clock should be kept accurate with NTP, and Snowflake protects against non-monotonic clocks, that is, clocks that run backwards.",
+          "cite": ["snowflake"]
+        }
+      ]
+    }
+  ],
+  "recall": [
+    {
+      "prompt": "How are the bits of a Snowflake ID divided?",
+      "answer": [
+        {
+          "text": "41 bits of millisecond time, 10 bits of machine ID, 12 bits of sequence number.",
+          "cite": ["snowflake"]
+        }
+      ]
+    },
+    {
+      "prompt": "How many machines and how many IDs per millisecond per machine does that layout allow?",
+      "answer": [
+        {
+          "text": "Up to 1024 machines, and a sequence that rolls over every 4096 per machine.",
+          "cite": ["snowflake"]
+        }
+      ]
+    },
+    {
+      "prompt": "What clock hazard does Snowflake guard against?",
+      "answer": [
+        {"text": "Non-monotonic clocks, meaning clocks that run backwards.", "cite": ["snowflake"]}
+      ]
+    }
+  ]
+}

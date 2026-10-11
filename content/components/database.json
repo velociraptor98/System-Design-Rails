@@ -1,0 +1,79 @@
+{
+  "id": "database",
+  "name": "Database",
+  "mechanisms": ["write-ahead-log", "consistent-hashing", "quorum-replication"],
+  "sections": [
+    {
+      "heading": "Durability",
+      "claims": [
+        {
+          "text": "PostgreSQL guarantees a committed transaction by flushing a write-ahead log: changes to data files are written only after the log records describing them have reached permanent storage.",
+          "cite": ["postgres-wal"]
+        }
+      ]
+    },
+    {
+      "heading": "Partitioning",
+      "claims": [
+        {
+          "text": "DynamoDB uses the value of an item's partition key as input to an internal hash function, and the output determines the partition in which the item is stored.",
+          "cite": ["dynamodb-partitions"]
+        },
+        {
+          "text": "Items are not stored in sorted order across partitions. With a composite key, items sharing a partition key are kept together in sorted order by the sort key.",
+          "cite": ["dynamodb-partitions"]
+        },
+        {
+          "text": "AWS recommends choosing a partition key that can have a large number of distinct values relative to the number of items in the table.",
+          "cite": ["dynamodb-partitions"]
+        },
+        {
+          "text": "DynamoDB allocates additional partitions when provisioned throughput is raised beyond what the existing partitions can support, or when a partition fills to capacity.",
+          "cite": ["dynamodb-partitions"]
+        }
+      ]
+    },
+    {
+      "heading": "Replication",
+      "claims": [
+        {
+          "text": "A DynamoDB partition is automatically replicated across multiple Availability Zones within a Region.",
+          "cite": ["dynamodb-partitions"]
+        },
+        {
+          "text": "Dynamo replicates each data item at N hosts and lets R and W, the numbers of nodes that must take part in a read and a write, be configured; R + W > N yields a quorum-like system.",
+          "cite": ["dynamo"]
+        }
+      ]
+    }
+  ],
+  "recall": [
+    {
+      "prompt": "How does DynamoDB decide which partition stores an item?",
+      "answer": [
+        {
+          "text": "It feeds the partition key value to an internal hash function; the output determines the partition.",
+          "cite": ["dynamodb-partitions"]
+        }
+      ]
+    },
+    {
+      "prompt": "What makes a good partition key, according to AWS?",
+      "answer": [
+        {
+          "text": "One that can have a large number of distinct values relative to the number of items in the table.",
+          "cite": ["dynamodb-partitions"]
+        }
+      ]
+    },
+    {
+      "prompt": "When does DynamoDB add partitions to a table?",
+      "answer": [
+        {
+          "text": "When provisioned throughput is raised beyond what existing partitions support, or when an existing partition fills to capacity.",
+          "cite": ["dynamodb-partitions"]
+        }
+      ]
+    }
+  ]
+}

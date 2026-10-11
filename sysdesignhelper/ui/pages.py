@@ -30,7 +30,7 @@ class RecallDrill(QWidget):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
-        self.toolbar = Toolbar("", " ", with_back=True)
+        self.toolbar = Toolbar("", with_back=True)
         self.toolbar.back.connect(self.finished.emit)
         self.next_button = button("Next")
         self.next_button.clicked.connect(self.next)
@@ -48,9 +48,9 @@ class RecallDrill(QWidget):
         body.addWidget(self.prompt)
         row = QHBoxLayout()
         row.setSpacing(14)
-        self.card = EditorCard("Answer from memory, then reveal.")
-        self.editor = self.card.editor
-        row.addWidget(self.card, 5)
+        editor_card = EditorCard("Answer from memory, then reveal.")
+        self.editor = editor_card.editor
+        row.addWidget(editor_card, 5)
         self.answer_host = QWidget()
         self.answer_layout = QVBoxLayout(self.answer_host)
         self.answer_layout.setContentsMargins(0, 0, 10, 0)
@@ -247,10 +247,11 @@ class PagesView(QWidget):
         self.page_layout.addStretch(1)
 
     def start_drill(self) -> None:
-        prompts = [prompt for page in self.selected_pages() for prompt in page.recall]
+        pages = self.selected_pages()
+        prompts = [prompt for page in pages for prompt in page.recall]
         if not prompts:
             return
-        if len(self.selected_pages()) > 1:
+        if len(pages) > 1:
             random.shuffle(prompts)
         self._end_drill()
         self.drill = RecallDrill(self.library, prompts)

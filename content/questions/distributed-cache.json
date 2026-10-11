@@ -1,0 +1,291 @@
+{
+  "id": "distributed-cache",
+  "title": "Design a distributed cache",
+  "category": "general",
+  "prompt": "Design an in-memory cache spread across many servers that sits in front of a database for a read-heavy service.",
+  "scope": {
+    "functional": [
+      "Get, set and delete a value by key.",
+      "Keys are spread across many cache servers.",
+      "Entries may be evicted when memory runs out.",
+      "A value changed in the database does not stay stale in the cache."
+    ],
+    "non_functional": [
+      "A get is served from memory, far faster than the database.",
+      "Losing a cache server does not push its whole load onto the database.",
+      "Adding or removing a server moves only a small share of the keys."
+    ],
+    "assumptions": [
+      "1 billion cached items.",
+      "An item averages 1 KB.",
+      "A cache server gives 64 GB of memory to items.",
+      "1 million gets per second at peak."
+    ],
+    "estimates": [
+      {"label": "Memory for all items", "working": "1,000,000,000 x 1 KB", "result": "1 TB"},
+      {
+        "label": "Cache servers needed for memory",
+        "working": "1 TB / 64 GB = 15.6",
+        "result": "16 servers"
+      },
+      {
+        "label": "Gets per server at peak, if evenly spread",
+        "working": "1,000,000 / 16",
+        "result": "62,500 per second"
+      },
+      {
+        "label": "Load moved to the database if one server's keys all miss",
+        "working": "1,000,000 / 16",
+        "result": "up to 62,500 queries per second"
+      }
+    ]
+  },
+  "api": {
+    "kind": "real-system",
+    "system": "memcached at Facebook",
+    "key_points": [
+      {
+        "text": "Memcached provides a simple set of operations: set, get and delete.",
+        "cite": ["memcache-fb"]
+      },
+      {
+        "text": "On a miss the cache hands the client a lease, a 64-bit token bound to the key, which the client presents when it sets the value.",
+        "cite": ["memcache-fb"]
+      },
+      {
+        "text": "Web servers send get requests over UDP to reduce latency and overhead, and send set and delete over TCP through mcrouter, because for operations that must confirm a state change TCP removes the need to add a retry mechanism to the UDP implementation.",
+        "cite": ["memcache-fb"]
+      },
+      {
+        "text": "A write does not update the cache: the web server writes to the database and then sends a delete, because deletes are idempotent.",
+        "cite": ["memcache-fb"]
+      }
+    ]
+  },
+  "data_model": {
+    "kind": "real-system",
+    "system": "Facebook memcache, Dynamo and Redis Cluster",
+    "key_points": [
+      {
+        "text": "Facebook distributes items across the memcached servers in a cluster through consistent hashing.",
+        "cite": ["memcache-fb"]
+      },
+      {
+        "text": "In consistent hashing a key is hashed to a position on a ring and assigned to the first node clockwise from it; a node arriving or leaving affects only its immediate neighbours.",
+        "cite": ["dynamo"]
+      },
+      {
+        "text": "Redis Cluster instead divides the key space into 16384 hash slots, computes a key's slot as CRC16(key) mod 16384, and assigns each master a subset of the slots.",
+        "cite": ["redis-cluster"]
+      },
+      {
+        "text": "The cache is not the authoritative source of the data and is therefore allowed to evict it.",
+        "cite": ["memcache-fb"]
+      }
+    ]
+  },
+  "architecture": {
+    "kind": "real-system",
+    "system": "Facebook memcache",
+    "notes": [
+      {
+        "text": "A web server asks memcache first; on a miss it reads the database and populates the cache. On a write it updates the database and deletes the key from the cache.",
+        "cite": ["memcache-fb"]
+      },
+      {
+        "text": "Hundreds of memcached servers are provisioned in a cluster, with items distributed by consistent hashing.",
+        "cite": ["memcache-fb"]
+      },
+      {
+        "text": "Gets go over UDP directly to memcached; sets and deletes go over TCP through mcrouter running on the same machine as the web server.",
+        "cite": ["memcache-fb"]
+      },
+      {
+        "text": "A small Gutter pool, about 1% of the memcached servers, takes requests for servers that have stopped responding.",
+        "cite": ["memcache-fb"]
+      }
+    ],
+    "design": {
+      "blocks": [
+        {
+          "id": "web",
+          "component": "service",
+          "name": "Web server",
+          "instances": 100,
+          "x": 0,
+          "y": 150,
+          "note": "The instance counts here are placeholders; the paper says hundreds of memcached servers per cluster."
+        },
+        {
+          "id": "mc",
+          "component": "cache",
+          "name": "Memcached pool",
+          "technology": "memcached",
+          "instances": 100,
+          "x": 520,
+          "y": 0,
+          "extras": {"eviction_policy": "allkeys-lru"}
+        },
+        {
+          "id": "gutter",
+          "component": "cache",
+          "name": "Gutter pool",
+          "technology": "memcached",
+          "instances": 2,
+          "x": 520,
+          "y": 150,
+          "extras": {"eviction_policy": "volatile-ttl"}
+        },
+        {
+          "id": "db",
+          "component": "database",
+          "name": "Database",
+          "technology": "MySQL",
+          "replication_factor": 2,
+          "x": 520,
+          "y": 300
+        }
+      ],
+      "connections": [
+        {
+          "from": "web",
+          "to": "mc",
+          "mode": "sync",
+          "protocol": "UDP",
+          "path": "both",
+          "label": "get; set/delete via TCP"
+        },
+        {
+          "from": "web",
+          "to": "gutter",
+          "mode": "sync",
+          "protocol": "UDP",
+          "path": "read",
+          "label": "retry when no reply"
+        },
+        {
+          "from": "web",
+          "to": "db",
+          "mode": "sync",
+          "protocol": "TCP",
+          "path": "both",
+          "label": "miss or write"
+        }
+      ]
+    },
+    "checks": [
+      {
+        "id": "look-aside",
+        "title": "The Service reads through a Cache with a Database behind it",
+        "miss": "No Connection from a Service to a Cache carries the read path, or the Service has no Database behind it.",
+        "rule": {
+          "all_of": [
+            {
+              "has_connection": {
+                "from": {"component": "service"},
+                "to": {"component": "cache"},
+                "where": {"path": ["read", "both"]}
+              }
+            },
+            {"has_connection": {"from": {"component": "service"}, "to": {"component": "database"}}}
+          ]
+        },
+        "rationale": {
+          "text": "Facebook's memcache is a demand-filled look-aside cache: the web server requests a value from the cache and on a miss retrieves it from the database.",
+          "cite": ["memcache-fb"]
+        }
+      },
+      {
+        "id": "cache-many-servers",
+        "title": "A Cache runs on more than one server",
+        "miss": "No Cache has more than one instance.",
+        "rule": {"has_block": {"component": "cache", "instances": {"gte": 2}}},
+        "rationale": {
+          "text": "Facebook provisions hundreds of memcached servers in a cluster and distributes items across them through consistent hashing.",
+          "cite": ["memcache-fb"]
+        }
+      },
+      {
+        "id": "cache-evicts",
+        "title": "Every Cache has an eviction policy that frees memory",
+        "miss": "A Cache has no eviction policy, or uses noeviction.",
+        "rule": {
+          "each_block": {
+            "where": {"component": "cache"},
+            "require": {"extras.eviction_policy": {"present": true, "ne": "noeviction"}}
+          }
+        },
+        "rationale": {
+          "text": "The cache is not the authoritative source of the data and is therefore allowed to evict cached data; under noeviction Redis instead returns errors once memory is full.",
+          "cite": ["memcache-fb", "redis-eviction"]
+        }
+      }
+    ]
+  },
+  "deep_dives": [
+    {
+      "prompt": "One cache server dies. What stops the requests for its keys from overwhelming the database?",
+      "kind": "real-system",
+      "system": "Facebook memcache",
+      "pages": ["cache"],
+      "key_points": [
+        {
+          "text": "A client that gets no response assumes the server has failed and reissues the get to a Gutter pool, a small set of machines of about 1% of the cluster.",
+          "cite": ["memcache-fb"]
+        },
+        {
+          "text": "If the Gutter request misses, the client queries the database and inserts the result into Gutter, so later requests for that key are hits.",
+          "cite": ["memcache-fb"]
+        },
+        {
+          "text": "Gutter entries expire quickly, trading slightly stale data for not needing invalidations.",
+          "cite": ["memcache-fb"]
+        },
+        {
+          "text": "Rehashing the failed server's keys onto the remaining servers was rejected: a single key can account for 20% of a server's requests, so the inheriting server might overload too.",
+          "cite": ["memcache-fb"]
+        }
+      ]
+    },
+    {
+      "prompt": "You add a seventeenth server. How do you avoid remapping most of the keys?",
+      "kind": "real-system",
+      "system": "Dynamo and Redis Cluster",
+      "pages": ["consistent-hashing", "hash-slots"],
+      "key_points": [
+        {
+          "text": "With consistent hashing the arrival or departure of a node only affects its immediate neighbours on the ring.",
+          "cite": ["dynamo"]
+        },
+        {
+          "text": "Virtual nodes, several positions on the ring per physical node, even out the data and load that plain random placement leaves non-uniform.",
+          "cite": ["dynamo"]
+        },
+        {
+          "text": "In Redis Cluster adding a node means moving hash slots to it from other nodes, which is done while the cluster is running.",
+          "cite": ["redis-cluster"]
+        }
+      ]
+    },
+    {
+      "prompt": "A reader misses, reads the database, and is slow to set the value. Meanwhile a writer updates the database and deletes the key. How do you stop the reader's old value from sticking?",
+      "kind": "real-system",
+      "system": "Facebook memcache",
+      "pages": ["cache"],
+      "key_points": [
+        {
+          "text": "This is a stale set: a value set in the cache that does not reflect the latest value, caused by concurrent updates being reordered.",
+          "cite": ["memcache-fb"]
+        },
+        {
+          "text": "On the miss the cache gives the reader a lease, a 64-bit token bound to that key, which the reader must present when setting the value.",
+          "cite": ["memcache-fb"]
+        },
+        {
+          "text": "The writer's delete invalidates the token, so the cache refuses the reader's late set.",
+          "cite": ["memcache-fb"]
+        }
+      ]
+    }
+  ]
+}

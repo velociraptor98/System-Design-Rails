@@ -3,14 +3,16 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QGridLayout, QHBoxLayout, QSplitter, QStackedWidget, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import (
+    QWIDGETSIZE_MAX, QGridLayout, QHBoxLayout, QSplitter, QStackedWidget, QVBoxLayout, QWidget,
+)
 
 from ..checks import run_checks
 from ..content import Library, Question, Scope
 from . import theme
 from .canvas import CanvasEditor, CanvasView, DesignScene
 from .widgets import (
-    AnswerPanel, ClaimView, EditorCard, SegmentedControl, Tabs, Toolbar, button, card, chip, clear_layout,
+    ClaimView, EditorCard, SegmentedControl, Tabs, Toolbar, answer_panel, button, card, chip, clear_layout,
     eyebrow, label, link_html, rule, scrollable, tick_row,
 )
 
@@ -34,6 +36,7 @@ class AttemptBox(QWidget):
                  inline: bool = False):
         super().__init__()
         self.build_reveal = build_reveal
+        self.inline = inline
         self.revealed: QWidget | None = None
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -41,12 +44,12 @@ class AttemptBox(QWidget):
         if heading:
             layout.addWidget(label(heading, "h2"))
         layout.addWidget(label(instruction, "muted"))
-        self.card = EditorCard("Write your answer before you reveal.")
-        self.editor = self.card.editor
+        editor_card = EditorCard("Write your answer before you reveal.")
+        self.editor = editor_card.editor
         self.button = None
         if inline:
-            self.card.setFixedHeight(132)
-            layout.addWidget(self.card)
+            editor_card.setFixedHeight(132)
+            layout.addWidget(editor_card)
             row = QHBoxLayout()
             self.button = button("Reveal Answer", icon_name="reveal")
             self.button.clicked.connect(self.reveal)
@@ -58,9 +61,8 @@ class AttemptBox(QWidget):
         else:
             self.slot = QHBoxLayout()
             self.slot.setSpacing(14)
-            self.slot.addWidget(self.card, 5)
+            self.slot.addWidget(editor_card, 5)
             layout.addLayout(self.slot, 1)
-        self.inline = inline
 
     def is_revealed(self) -> bool:
         return self.revealed is not None and not self.revealed.isHidden()
@@ -164,14 +166,13 @@ class ArchitectureStage(QWidget):
         layout.addWidget(self.splitter, 1)
 
     def _reference_tab(self) -> QWidget:
-        self.reference_scene = DesignScene(self.library, self.question.architecture.design, read_only=True)
-        self.reference_scene.block_activated.connect(self.open_page.emit)
-        self.reference_view = CanvasView(self.reference_scene)
-        notes = AnswerPanel(self.question.architecture.answer, tickable=False, heading="Reference design")
+        scene = DesignScene(self.library, self.question.architecture.design, read_only=True)
+        scene.block_activated.connect(self.open_page.emit)
+        self.reference_view = CanvasView(scene)
         host = QWidget()
         column = QVBoxLayout(host)
         column.setContentsMargins(0, 0, 10, 0)
-        column.addWidget(notes)
+        column.addWidget(answer_panel(self.question.architecture.answer, tickable=False, heading="Reference design"))
         column.addStretch(1)
         tab = QSplitter(Qt.Orientation.Horizontal)
         tab.addWidget(self.reference_view)
@@ -219,8 +220,6 @@ class ArchitectureStage(QWidget):
 
 
 class SessionView(QWidget):
-    """One Practice session: a Question worked through its Stages. Nothing here is stored."""
-
     closed = pyqtSignal()
     open_page = pyqtSignal(str)
 
@@ -247,7 +246,6 @@ class SessionView(QWidget):
         self.prompt.setMaximumWidth(760)
         self.body.addWidget(self.prompt)
         self.stages = SegmentedControl(STAGES)
-        self.stage_buttons = self.stages.group
         self.body.addWidget(self.stages)
         self.stack = QStackedWidget()
         self.body.addWidget(self.stack, 1)
@@ -261,10 +259,10 @@ class SessionView(QWidget):
             lambda: estimates_panel(scope))
         self._typed_stage(
             "Define the interface: the operations, what each takes and returns, and how failures show.",
-            lambda: AnswerPanel(question.api))
+            lambda: answer_panel(question.api))
         self._typed_stage(
             "Define what is stored: the records, their keys, and how they are looked up.",
-            lambda: AnswerPanel(question.data_model))
+            lambda: answer_panel(question.data_model))
         self.architecture = ArchitectureStage(question, library)
         self.architecture.open_page.connect(self.open_page.emit)
         self.stack.addWidget(self.architecture)
@@ -304,7 +302,7 @@ class SessionView(QWidget):
         layout = QVBoxLayout(host)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
-        layout.addWidget(AnswerPanel(dive.answer))
+        layout.addWidget(answer_panel(dive.answer))
         if dive.pages:
             row = QHBoxLayout()
             row.setSpacing(8)
@@ -345,7 +343,7 @@ class SessionView(QWidget):
         margin = 20 if wide else 32
         self.body.setContentsMargins(margin, 4, margin, margin)
         self.prompt.setVisible(not wide)
-        self.stages.setMaximumWidth(16777215 if wide else 820)
+        self.stages.setMaximumWidth(QWIDGETSIZE_MAX if wide else 820)
         self._sync_toolbar()
 
     def has_work(self) -> bool:

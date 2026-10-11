@@ -1,0 +1,70 @@
+{
+  "id": "sliding-window-counter",
+  "name": "Sliding window counter",
+  "sections": [
+    {
+      "heading": "The alternatives it replaces",
+      "claims": [
+        {
+          "text": "The most naive rate limiter increments a counter that is reset at the start of each sampling period. Cloudflare rejects it because the resets allow regular traffic spikes to go through the rate limiter.",
+          "cite": ["cloudflare-counting"]
+        },
+        {
+          "text": "Keeping a record of each request is more accurate, but Cloudflare notes it has huge processing and memory requirements.",
+          "cite": ["cloudflare-counting"]
+        }
+      ]
+    },
+    {
+      "heading": "The approximation",
+      "claims": [
+        {
+          "text": "Cloudflare keeps only two numbers per counter, the count for the previous period and the count for the current one, and weights the previous count by how much of it still falls inside the sliding window.",
+          "cite": ["cloudflare-counting"]
+        },
+        {
+          "text": "In Cloudflare's example, with 42 requests in the previous minute and 18 in the current minute, which started 15 seconds ago, the rate is 42 x ((60 - 15) / 60) + 18 = 49.5 requests.",
+          "cite": ["cloudflare-counting"]
+        }
+      ]
+    },
+    {
+      "heading": "How accurate it is",
+      "claims": [
+        {
+          "text": "Cloudflare's analysis found that 0.003% of requests were wrongly allowed or rate limited, with an average difference of 6% between the real rate and the approximate rate.",
+          "cite": ["cloudflare-counting"]
+        }
+      ]
+    }
+  ],
+  "recall": [
+    {
+      "prompt": "Why does a counter reset every period make a poor rate limiter?",
+      "answer": [
+        {
+          "text": "The resets allow regular traffic spikes to go through.",
+          "cite": ["cloudflare-counting"]
+        }
+      ]
+    },
+    {
+      "prompt": "How many numbers does Cloudflare's sliding window keep per counter, and how are they combined?",
+      "answer": [
+        {
+          "text": "Two: the previous and current period counts. The previous count is weighted by the share of that period still inside the window, as in 42 x 0.75 + 18 = 49.5.",
+          "cite": ["cloudflare-counting"]
+        }
+      ]
+    },
+    {
+      "prompt": "How accurate did Cloudflare find the approximation?",
+      "answer": [
+        {
+          "text": "0.003% of requests wrongly allowed or limited, and a 6% average difference from the real rate.",
+          "cite": ["cloudflare-counting"]
+        }
+      ]
+    }
+  ]
+}

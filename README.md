@@ -1,4 +1,4 @@
-# System Design Practice
+# System Design Rails
 
 A desktop trainer for system design interviews. You attempt a Question stage by stage, build the
 architecture as a Design on a drag-and-drop Canvas, and then reveal a Reference answer in which
@@ -42,9 +42,10 @@ behind these rules.
 
 ## Content
 
-All content is plain YAML under `content/`, separate from the code:
+All content is plain JSON under `content/`, separate from the code:
 
-- `sources.yaml`: every cited URL, and whether it was retrieved.
+- `sources.json`: every cited URL, and whether it was opened and read when the claims citing it
+  were written.
 - `components/` and `mechanisms/`: one Page per file.
 - `questions/`: one Question per file, including its reference Design and its Checks. The rule
   vocabulary for Checks is documented at the top of `sysdesignhelper/checks.py`.

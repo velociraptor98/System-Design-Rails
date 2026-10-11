@@ -84,6 +84,3 @@ def test_removing_a_block_removes_its_connections(design):
     design.remove_block("b2")
     assert design.connections == []
 
-
-def test_design_round_trips_through_dict(design):
-    assert Design.from_dict(design.to_dict()) == design

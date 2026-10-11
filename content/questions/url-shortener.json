@@ -1,0 +1,357 @@
+{
+  "id": "url-shortener",
+  "title": "Design a URL shortener",
+  "category": "general",
+  "prompt": "Design a service that turns a long URL into a short link, and redirects anyone who opens the short link to the original URL.",
+  "company_tags": [
+    {
+      "company": "Goldman Sachs",
+      "reports": [
+        "https://leetcode.com/discuss/post/1186620/goldman-sachs-software-engineer-dallas-april-2021/"
+      ]
+    }
+  ],
+  "scope": {
+    "functional": [
+      "Create a short link for a given long URL.",
+      "Opening a short link redirects to the original URL.",
+      "The creator may choose a custom alias instead of a generated code.",
+      "A link may be given an expiry time, after which it stops redirecting."
+    ],
+    "non_functional": [
+      "Redirects keep working when link creation is unavailable.",
+      "A link that was created successfully is never lost.",
+      "Redirects are fast; the service adds little latency in front of the destination.",
+      "Two different long URLs never receive the same short code."
+    ],
+    "assumptions": [
+      "100 million new links per month.",
+      "100 redirects for every link created.",
+      "Links are kept for 5 years.",
+      "A stored link record is about 500 bytes."
+    ],
+    "estimates": [
+      {
+        "label": "Writes per second",
+        "working": "100,000,000 / (30 x 86,400 s) = 100,000,000 / 2,592,000",
+        "result": "about 39 per second"
+      },
+      {"label": "Redirects per second", "working": "39 x 100", "result": "about 3,900 per second"},
+      {
+        "label": "Links stored after 5 years",
+        "working": "100,000,000 x 12 x 5",
+        "result": "6 billion"
+      },
+      {
+        "label": "Storage after 5 years",
+        "working": "6,000,000,000 x 500 bytes",
+        "result": "3 TB before replication"
+      },
+      {
+        "label": "Short code length in base 62",
+        "working": "62^6 = 56.8 billion, 62^7 = 3.5 trillion; both exceed 6 billion",
+        "result": "6 characters are enough, 7 leave headroom"
+      }
+    ]
+  },
+  "api": {
+    "kind": "synthesized",
+    "key_points": [
+      {
+        "text": "One call creates a link: it takes the long URL, an optional alias and an optional expiry, and returns the short code. One call resolves a link: a GET on the short code answers with a redirect.",
+        "synthesis": true
+      },
+      {
+        "text": "The server SHOULD send the destination in a Location header field, which the user agent MAY use for automatic redirection.",
+        "cite": ["rfc9110"]
+      },
+      {
+        "text": "301 (Moved Permanently) says the resource has a new permanent URI, and a 301 response is heuristically cacheable.",
+        "cite": ["rfc9110"]
+      },
+      {
+        "text": "302 (Found) says the resource resides temporarily under a different URI and the client ought to continue to use the original URI for future requests. 302 is not among the heuristically cacheable status codes.",
+        "cite": ["rfc9110"]
+      },
+      {
+        "text": "The choice of status code is therefore a choice about load and control. 301 lets clients and caches stop asking the service; 302 keeps every click coming to it, which expiry and click counting depend on.",
+        "synthesis": true
+      }
+    ]
+  },
+  "data_model": {
+    "kind": "synthesized",
+    "key_points": [
+      {
+        "text": "One record per link, keyed by the short code, holding the long URL, the creation time, the expiry time and the creator.",
+        "synthesis": true
+      },
+      {
+        "text": "A store such as DynamoDB feeds the partition key value to a hash function to choose the partition, and AWS recommends a partition key with a large number of distinct values relative to the number of items.",
+        "cite": ["dynamodb-partitions"]
+      },
+      {
+        "text": "The short code is unique per record, which makes it a partition key of the kind that recommendation describes, and every redirect looks a record up by exactly that key.",
+        "synthesis": true
+      },
+      {
+        "text": "Twitter's Snowflake produces a 64-bit ID from 41 bits of millisecond time, 10 bits of machine ID and 12 bits of sequence number, without the generating machines having to coordinate.",
+        "cite": ["snowflake"]
+      },
+      {
+        "text": "A generated numeric ID can be written in base 62 to give the short code. A custom alias is stored under the same key, so creating one must fail if the key already exists.",
+        "synthesis": true
+      }
+    ]
+  },
+  "architecture": {
+    "kind": "synthesized",
+    "notes": [
+      {
+        "text": "Clients reach a pool of stateless link service instances through a load balancer. The service reads through a cache and falls back to the database, which holds every link.",
+        "synthesis": true
+      },
+      {
+        "text": "Facebook's memcache is a demand-filled look-aside cache: the web server asks the cache first, and on a miss reads the database and populates the cache.",
+        "cite": ["memcache-fb"]
+      },
+      {
+        "text": "Facebook attributes the value of caching to a workload dominated by fetching data. This Question's Scope has the same shape, with 100 redirects per link created.",
+        "cite": ["memcache-fb"]
+      },
+      {
+        "text": "Dynamo replicates each data item at N hosts, and reports (3, 2, 2) as the common (N, R, W) configuration.",
+        "cite": ["dynamo"]
+      }
+    ],
+    "design": {
+      "blocks": [
+        {"id": "client", "component": "client", "name": "Browser", "x": 0, "y": 120},
+        {
+          "id": "lb",
+          "component": "load-balancer",
+          "name": "Load balancer",
+          "x": 270,
+          "y": 120,
+          "extras": {"method": "round-robin"}
+        },
+        {
+          "id": "svc",
+          "component": "service",
+          "name": "Link service",
+          "instances": 4,
+          "x": 540,
+          "y": 120
+        },
+        {
+          "id": "cache",
+          "component": "cache",
+          "name": "Link cache",
+          "technology": "Redis",
+          "x": 880,
+          "y": 0,
+          "extras": {"eviction_policy": "allkeys-lru"}
+        },
+        {
+          "id": "db",
+          "component": "database",
+          "name": "Link store",
+          "technology": "DynamoDB",
+          "replication_factor": 3,
+          "partitioning": "hash",
+          "partition_key": "short_code",
+          "x": 880,
+          "y": 240
+        }
+      ],
+      "connections": [
+        {"from": "client", "to": "lb", "mode": "sync", "protocol": "HTTP", "path": "both"},
+        {"from": "lb", "to": "svc", "mode": "sync", "protocol": "HTTP", "path": "both"},
+        {
+          "from": "svc",
+          "to": "cache",
+          "mode": "sync",
+          "protocol": "TCP",
+          "path": "both",
+          "label": "get / delete"
+        },
+        {
+          "from": "svc",
+          "to": "db",
+          "mode": "sync",
+          "protocol": "HTTP",
+          "path": "both",
+          "label": "get / put"
+        }
+      ]
+    },
+    "checks": [
+      {
+        "id": "cache-on-read-path",
+        "title": "The service reads through a cache in front of the database",
+        "miss": "No Connection from a Service to a Cache carries the read path, or the Service has no Database behind it.",
+        "rule": {
+          "all_of": [
+            {
+              "has_connection": {
+                "from": {"component": "service"},
+                "to": {"component": "cache"},
+                "where": {"path": ["read", "both"]}
+              }
+            },
+            {"has_connection": {"from": {"component": "service"}, "to": {"component": "database"}}}
+          ]
+        },
+        "rationale": {
+          "text": "In Facebook's look-aside pattern the web server requests a value from the cache first and only on a miss retrieves it from the database.",
+          "cite": ["memcache-fb"]
+        }
+      },
+      {
+        "id": "database-replicated",
+        "title": "Every Database keeps more than one copy of the data",
+        "miss": "There is no Database, or a Database has a replication factor of 1.",
+        "rule": {
+          "each_block": {
+            "where": {"component": "database"},
+            "require": {"replication_factor": {"gte": 2}}
+          }
+        },
+        "rationale": {
+          "text": "Dynamo replicates each data item at N hosts to achieve high availability and durability.",
+          "cite": ["dynamo"]
+        }
+      },
+      {
+        "id": "database-partitioned",
+        "title": "Every Database is partitioned on a stated key",
+        "miss": "There is no Database, or a Database has no partitioning or no partition key.",
+        "rule": {
+          "each_block": {
+            "where": {"component": "database"},
+            "require": {"partitioning": ["hash", "range"], "partition_key": {"present": true}}
+          }
+        },
+        "rationale": {
+          "text": "DynamoDB uses the partition key value as input to a hash function whose output determines the partition in which an item is stored.",
+          "cite": ["dynamodb-partitions"]
+        }
+      },
+      {
+        "id": "service-redundant",
+        "title": "More than one Service instance sits behind a Load balancer",
+        "miss": "No Load balancer connects to a Service, or a Service runs as a single instance.",
+        "rule": {
+          "all_of": [
+            {
+              "has_connection": {
+                "from": {"component": "load-balancer"},
+                "to": {"component": "service"}
+              }
+            },
+            {
+              "each_block": {
+                "where": {"component": "service"},
+                "require": {"instances": {"gte": 2}}
+              }
+            }
+          ]
+        },
+        "rationale": {
+          "text": "nginx marks a server as failed when a response fails with an error and tries to avoid selecting it for subsequent requests.",
+          "cite": ["nginx-lb"]
+        }
+      },
+      {
+        "id": "cache-evicts",
+        "title": "Every Cache has an eviction policy that frees memory",
+        "miss": "A Cache has no eviction policy, or uses noeviction.",
+        "rule": {
+          "each_block": {
+            "where": {"component": "cache"},
+            "require": {"extras.eviction_policy": {"present": true, "ne": "noeviction"}}
+          }
+        },
+        "rationale": {
+          "text": "Under noeviction Redis returns an error for commands that would cache new data once the memory limit is reached; allkeys-lru is described as a good default.",
+          "cite": ["redis-eviction"]
+        }
+      }
+    ]
+  },
+  "deep_dives": [
+    {
+      "prompt": "How do you generate short codes that never collide, without every creation going through one coordinator?",
+      "kind": "synthesized",
+      "pages": ["time-ordered-ids"],
+      "key_points": [
+        {
+          "text": "Twitter required that machines generating IDs should not have to coordinate with each other, for high availability within and across data centres.",
+          "cite": ["snowflake"]
+        },
+        {
+          "text": "A Snowflake ID is 41 bits of millisecond time, 10 bits of configured machine ID (up to 1024 machines) and 12 bits of sequence number (4096 per machine before rolling over).",
+          "cite": ["snowflake"]
+        },
+        {
+          "text": "Snowflake depends on the system clock: it should be kept accurate with NTP, and the generator protects against clocks that run backwards.",
+          "cite": ["snowflake"]
+        },
+        {
+          "text": "Uniqueness then comes from each service instance holding a distinct machine ID, and the code is the ID written in base 62. A full 64-bit ID is longer than the 7 characters the estimate calls for, so shorter codes need fewer bits or a different generator.",
+          "synthesis": true
+        }
+      ]
+    },
+    {
+      "prompt": "One link goes viral. What stops the redirect traffic from reaching the database?",
+      "kind": "synthesized",
+      "pages": ["cache-eviction", "http-redirection"],
+      "key_points": [
+        {
+          "text": "With a look-aside cache only a miss reaches the database; the result is then put in the cache for later reads.",
+          "cite": ["memcache-fb"]
+        },
+        {
+          "text": "Redis's documentation recommends allkeys-lru when a subset of elements is accessed far more often than the rest.",
+          "cite": ["redis-eviction"]
+        },
+        {
+          "text": "A thundering herd arises when a key has heavy read and write activity and writes keep invalidating the cached value; Facebook's leases address it.",
+          "cite": ["memcache-fb"]
+        },
+        {
+          "text": "A 301 response is heuristically cacheable, so clients and intermediaries may reuse it without asking the service again.",
+          "cite": ["rfc9110"]
+        },
+        {
+          "text": "A link is written once and then only read, so the write-driven invalidation behind a thundering herd is rare here; the first miss after an eviction is the case to think about.",
+          "synthesis": true
+        }
+      ]
+    },
+    {
+      "prompt": "How is 3 TB of links spread across machines, and what happens when one machine fails?",
+      "kind": "synthesized",
+      "pages": ["consistent-hashing", "quorum-replication"],
+      "key_points": [
+        {
+          "text": "In consistent hashing a key is hashed to a position on a ring and assigned to the first node clockwise from it, and the arrival or departure of a node only affects its immediate neighbours.",
+          "cite": ["dynamo"]
+        },
+        {
+          "text": "Dynamo assigns each node multiple points on the ring, virtual nodes, to even out data and load.",
+          "cite": ["dynamo"]
+        },
+        {
+          "text": "Each item is replicated at N hosts: the coordinator stores it and replicates it at the N-1 clockwise successors.",
+          "cite": ["dynamo"]
+        },
+        {
+          "text": "With R + W > N the system behaves like a quorum system, and latency is dictated by the slowest of the R or W replicas.",
+          "cite": ["dynamo"]
+        }
+      ]
+    }
+  ]
+}

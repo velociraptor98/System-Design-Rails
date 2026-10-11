@@ -1,4 +1,4 @@
-# System Design Practice
+# System Design Rails
 
 A desktop trainer for system design interviews. The user attempts a Question stage by stage, builds the architecture on a Canvas, and checks each attempt against a Reference answer whose claims are backed by Primary sources.
 

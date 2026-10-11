@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 
 PARTITIONING = ("none", "hash", "range")
 MODES = ("sync", "async")
@@ -43,9 +43,6 @@ class Design:
     def block(self, block_id: str) -> Block | None:
         return next((b for b in self.blocks if b.id == block_id), None)
 
-    def connection(self, connection_id: str) -> Connection | None:
-        return next((c for c in self.connections if c.id == connection_id), None)
-
     def add_block(self, component: str, name: str = "", x: float = 0.0, y: float = 0.0) -> Block:
         block = Block(id=self._next_id("b", (b.id for b in self.blocks)), component=component, name=name, x=x, y=y)
         self.blocks.append(block)
@@ -69,16 +66,6 @@ class Design:
 
     def is_empty(self) -> bool:
         return not self.blocks
-
-    def to_dict(self) -> dict:
-        return {
-            "blocks": [asdict(b) for b in self.blocks],
-            "connections": [
-                {"id": c.id, "from": c.source, "to": c.target, "mode": c.mode,
-                 "protocol": c.protocol, "path": c.path, "label": c.label}
-                for c in self.connections
-            ],
-        }
 
     @classmethod
     def from_dict(cls, data: dict) -> Design:

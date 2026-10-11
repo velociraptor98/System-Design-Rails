@@ -1,5 +1,5 @@
-"""Colours and the stylesheet. Translucent design tokens are pre-blended over
-the window colour where Qt needs a solid colour to paint with."""
+"""Translucent design tokens are pre-blended over the window colour where Qt
+needs a solid colour to paint with."""
 
 from pathlib import Path
 
@@ -28,9 +28,6 @@ HOVER = "rgba(255, 255, 255, 6%)"
 SEG = "rgba(255, 255, 255, 7%)"
 SELECTED = "rgba(255, 255, 255, 11%)"
 
-# Kept for code that predates the redesign.
-BG, SURFACE, RAISED, BORDER, MUTED, BAD = WIN, CARD, NODE, DOT, TEXT2, DANGER
-
 STYLESHEET = f"""
 * {{ font-size: 13px; }}
 QWidget {{ background: transparent; color: {TEXT}; }}
@@ -38,7 +35,6 @@ QMainWindow, #root {{ background: {WIN}; }}
 QToolTip {{ background: {GLASS}; color: {TEXT}; border: 1px solid {DOT}; padding: 4px 6px; }}
 
 #sidebar {{ background: {SIDE}; border: 1px solid {LINE}; border-radius: 18px; }}
-#eyebrow {{ font-size: 11px; font-weight: 600; color: {TEXT3}; }}
 #navButton {{
     border: none; border-radius: 10px; padding: 0 10px; min-height: 34px; max-height: 34px;
     text-align: left; font-size: 13.5px; font-weight: 500; color: {TEXT};
@@ -69,17 +65,13 @@ QPushButton#cta {{
 }}
 QPushButton#cta:hover {{ background: #1f7be3; }}
 QPushButton#cta:disabled {{ background: {SEG}; color: {TEXT3}; border: 1px solid {LINE}; }}
-QPushButton#pill {{
+QPushButton#pill, QPushButton#pillDanger {{
     background: {SEG}; border: 1px solid {LINE}; border-radius: 15px;
     min-height: 28px; max-height: 28px; padding: 0 14px; font-weight: 500;
 }}
-QPushButton#pill:hover {{ background: {SELECTED}; }}
+QPushButton#pill:hover, QPushButton#pillDanger:hover {{ background: {SELECTED}; }}
 QPushButton#pill:disabled {{ color: {TEXT3}; }}
-QPushButton#pillDanger {{
-    background: {SEG}; border: 1px solid {LINE}; border-radius: 15px; color: {DANGER};
-    min-height: 28px; max-height: 28px; padding: 0 14px; font-weight: 500;
-}}
-QPushButton#pillDanger:hover {{ background: {SELECTED}; }}
+QPushButton#pillDanger {{ color: {DANGER}; }}
 QPushButton#chipLink {{
     background: {SEG}; border: 1px solid {LINE}; border-radius: 12px; color: {LINK};
     min-height: 22px; max-height: 22px; padding: 0 10px; font-size: 12px; font-weight: 500;
@@ -91,8 +83,7 @@ QPushButton#chipLink:hover {{ background: {SELECTED}; }}
 QPushButton#stepButton {{ border: none; font-size: 15px; min-width: 28px; max-width: 28px; min-height: 26px; max-height: 26px; }}
 QPushButton#stepButton:hover {{ background: {HOVER}; }}
 
-#card {{ background: {CARD}; border: 1px solid {LINE}; border-radius: 16px; }}
-#questionCard {{ background: {CARD}; border: 1px solid {LINE}; border-radius: 16px; }}
+#card, #questionCard {{ background: {CARD}; border: 1px solid {LINE}; border-radius: 16px; }}
 #questionCard:hover {{ border-color: {LINK}; }}
 #editorCard {{ background: {CARD}; border: 1px solid {LINE}; border-radius: 14px; }}
 #editorCard[focused="true"] {{ border-color: {LINK}; }}
@@ -102,9 +93,12 @@ QLabel#chip {{
     background: {SEG}; border: 1px solid {LINE}; border-radius: 10px; color: {TEXT2};
     min-height: 16px; padding: 2px 10px; font-size: 12px; font-weight: 500;
 }}
-QLabel#chipGood {{ background: rgba(99, 214, 138, 14%); color: {GOOD}; border-radius: 10px; min-height: 16px; padding: 3px 10px; font-size: 12px; font-weight: 500; }}
-QLabel#chipWarn {{ background: rgba(240, 195, 106, 14%); color: {WARN}; border-radius: 10px; min-height: 16px; padding: 3px 10px; font-size: 12px; font-weight: 500; }}
-QLabel#chipBad {{ background: rgba(255, 138, 128, 14%); color: {DANGER}; border-radius: 10px; min-height: 16px; padding: 3px 10px; font-size: 12px; font-weight: 500; }}
+QLabel#chipGood, QLabel#chipWarn, QLabel#chipBad {{
+    border-radius: 10px; min-height: 16px; padding: 3px 10px; font-size: 12px; font-weight: 500;
+}}
+QLabel#chipGood {{ background: rgba(99, 214, 138, 14%); color: {GOOD}; }}
+QLabel#chipWarn {{ background: rgba(240, 195, 106, 14%); color: {WARN}; }}
+QLabel#chipBad {{ background: rgba(255, 138, 128, 14%); color: {DANGER}; }}
 QLabel#disclaimer {{ background: rgba(240, 195, 106, 12%); color: {WARN}; border-radius: 10px; padding: 9px 12px; }}
 QLabel#realSystem {{ background: rgba(99, 214, 138, 12%); color: {GOOD}; border-radius: 10px; padding: 9px 12px; }}
 QLabel#citation {{ color: {LINK}; font-size: 11.5px; }}

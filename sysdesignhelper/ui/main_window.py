@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import QSize, Qt
-from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
-    QButtonGroup, QFrame, QGridLayout, QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPushButton,
+    QButtonGroup, QFrame, QGridLayout, QHBoxLayout, QMainWindow, QMessageBox, QPushButton,
     QStackedWidget, QVBoxLayout, QWidget,
 )
 
@@ -12,7 +11,7 @@ from . import icons, theme
 from .canvas import CanvasEditor
 from .pages import PagesView
 from .questions import QuestionsView
-from .widgets import Toolbar, button, label
+from .widgets import Toolbar, button, eyebrow, label
 
 AREAS = ("Questions", "Pages", "Sandbox")
 
@@ -66,7 +65,7 @@ class NavButton(QPushButton):
 class MainWindow(QMainWindow):
     def __init__(self, library: Library):
         super().__init__()
-        self.setWindowTitle("System Design Practice")
+        self.setWindowTitle("System Design Rails")
         # Below this the Canvas is squeezed out between the palette and the inspector.
         self.setMinimumSize(1180, 720)
         self.resize(1280, 860)
@@ -83,14 +82,9 @@ class MainWindow(QMainWindow):
         sidebar.setObjectName("sidebar")
         sidebar.setFixedWidth(224)
         side = QVBoxLayout(sidebar)
-        side.setContentsMargins(10, 14, 10, 14)
+        side.setContentsMargins(10, 18, 10, 14)
         side.setSpacing(2)
-        side.addSpacing(4)
-        title = QLabel("SYSTEM DESIGN PRACTICE")
-        title.setObjectName("eyebrow")
-        font = title.font()
-        font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 0.3)
-        title.setFont(font)
+        title = eyebrow("System Design Rails")
         title.setContentsMargins(10, 0, 10, 8)
         side.addWidget(title)
         self.nav = QButtonGroup(self)

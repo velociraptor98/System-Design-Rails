@@ -1,10 +1,11 @@
+import json
 from pathlib import Path
 
 import pytest
-import yaml
 
 from sysdesignhelper.checks import run_checks
 from sysdesignhelper.content import REAL_SYSTEM, ContentError, load_library
+from sysdesignhelper.design import Design
 
 
 def all_claims(library):
@@ -56,8 +57,6 @@ def test_reference_design_passes_its_own_checks(library):
 
 
 def test_empty_design_fails_every_check(library):
-    from sysdesignhelper.design import Design
-
     for question in library.questions.values():
         results = run_checks(question.architecture.checks, Design())
         assert not any(result.passed for result in results), question.id
@@ -72,13 +71,13 @@ def write_minimal_content(root: Path, claim: dict):
     (root / "components").mkdir()
     (root / "mechanisms").mkdir()
     (root / "questions").mkdir()
-    (root / "sources.yaml").write_text(yaml.safe_dump({"src": {"url": "https://example.org/a", "retrieved": False}}))
+    (root / "sources.json").write_text(json.dumps({"src": {"url": "https://example.org/a", "retrieved": False}}))
     page = {
         "id": "thing", "name": "Thing",
         "sections": [{"heading": "H", "claims": [claim]}],
         "recall": [{"prompt": "P?", "answer": [{"text": "A", "cite": ["src"]}]}],
     }
-    (root / "mechanisms" / "thing.yaml").write_text(yaml.safe_dump(page))
+    (root / "mechanisms" / "thing.json").write_text(json.dumps(page))
 
 
 def test_uncited_claim_is_rejected(tmp_path):

@@ -1,0 +1,44 @@
+{
+  "id": "token-bucket",
+  "name": "Token bucket",
+  "sections": [
+    {
+      "heading": "How it works",
+      "claims": [
+        {
+          "text": "Stripe rate limits with the token bucket algorithm: a centralized bucket holds tokens, each request takes one, tokens drip back into the bucket over time, and a request that finds the bucket empty is rejected.",
+          "cite": ["stripe-rate-limiters"]
+        }
+      ]
+    },
+    {
+      "heading": "Bursts",
+      "claims": [
+        {
+          "text": "Stripe's request rate limiter restricts each user to N requests per second, and Stripe added the ability to briefly burst above the cap for sudden spikes in usage during real-time events.",
+          "cite": ["stripe-rate-limiters"]
+        }
+      ]
+    }
+  ],
+  "recall": [
+    {
+      "prompt": "Describe the token bucket algorithm as Stripe uses it.",
+      "answer": [
+        {
+          "text": "Each request takes a token from a bucket, tokens drip back over time, and a request is rejected when the bucket is empty.",
+          "cite": ["stripe-rate-limiters"]
+        }
+      ]
+    },
+    {
+      "prompt": "What does Stripe allow on top of a flat N requests per second?",
+      "answer": [
+        {
+          "text": "Briefly bursting above the cap for sudden spikes during real-time events.",
+          "cite": ["stripe-rate-limiters"]
+        }
+      ]
+    }
+  ]
+}
